@@ -1,34 +1,32 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Stage, Layer, Line, Circle, Text, Image as KonvaImage } from 'react-konva';
-import useImage from 'use-image';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Stage, Layer } from 'react-konva';
+import MapaImagem from './components/MapaImagem';
+import MesaToolbar from './components/MesaToolbar';
+import TokenModal from './components/TokenModal';
+import TokenGroupControls from './components/TokenGroupControls';
+import TokenNode from './components/TokenNode';
+import GridLayer from './components/GridLayer';
+import MeasurementLayer from './components/MeasurementLayer';
+import SelectionRectangle from './components/SelectionRectangle';
+import './App.css';
 
 const TAMANHO_GRID = 50;
 const METROS_POR_QUADRADO = 1.5;
 
-// 1. COMPONENTE AUXILIAR DO MAPA 🖼️
-function MapaImagem({ url, onMapaCarregado }) {
-  const [imagem] = useImage(url);
-
-  useEffect(() => {
-    if (imagem) {
-      onMapaCarregado({
-        largura: imagem.width,
-        altura: imagem.height,
-      });
-    }
-  }, [imagem, onMapaCarregado]);
-
-  return <KonvaImage image={imagem} x={0} y={0} />;
-}
-
-// 2. COMPONENTE PRINCIPAL DA MESA 🚀
+// Componente principal da mesa: mantém o estado e conecta os componentes da interface.
 export default function MesaRPG() {
   // Estados da mesa 🧠
   const [tokens, setTokens] = useState([]);
   const [tokensSelecionados, setTokensSelecionados] = useState([]);
   const [posicoesIniciais, setPosicoesIniciais] = useState({});
+  const [grupoArrastado, setGrupoArrastado] = useState([]);
+  const [selecaoArea, setSelecaoArea] = useState(null);
+  const selecaoAreaConcluida = useRef(false);
+  const posicoesGrupoMoldura = useRef(null);
+  const redimensionamentoGrupo = useRef(null);
   const [janelaToken, setJanelaToken] = useState(false);
   const [corSelecionada, setCorSelecionada] = useState('#ff0044');
+  const [imagemToken, setImagemToken] = useState(null);
   const [quantTokens, setQuantTokens] = useState(1);
   const [urlMapa, setUrlMapa] = useState(null);
 
@@ -55,7 +53,6 @@ export default function MesaRPG() {
   const alternarToken = () => setJanelaToken(!janelaToken);
 
   const criarNovoToken = () => {
-    const raio = TAMANHO_GRID / 2;
     const novosTokens = [];
     for (let i = 0; i < quantTokens; i++) {
       novosTokens.push({
@@ -63,10 +60,20 @@ export default function MesaRPG() {
         x: window.innerWidth / 2 + i * 10,
         y: window.innerHeight / 2,
         cor: corSelecionada,
+        imagem: imagemToken,
       });
     }
     setTokens([...tokens, ...novosTokens]);
     setJanelaToken(false);
+  };
+
+  const selecionarImagemToken = (e) => {
+    const arquivo = e.target.files?.[0];
+    if (!arquivo) return;
+    const leitor = new FileReader();
+    leitor.onload = () => setImagemToken(leitor.result);
+    leitor.readAsDataURL(arquivo);
+    e.target.value = '';
   };
 
   // Exclusão de Tokens Selecionados 🗑️
@@ -75,6 +82,23 @@ export default function MesaRPG() {
       tokensAtuais.filter((tk) => !tokensSelecionados.includes(tk.id))
     );
     setTokensSelecionados([]);
+  };
+
+  const selecionarToken = (e, id) => {
+    if (medindo) return;
+    e.cancelBubble = true;
+    if (e.evt.shiftKey) {
+      setTokensSelecionados((atuais) => atuais.includes(id)
+        ? atuais.filter((tokenId) => tokenId !== id)
+        : [...atuais, id]);
+    } else {
+      setTokensSelecionados([id]);
+    }
+  };
+
+  const limparSelecaoNoDuploClique = (e) => {
+    e.cancelBubble = true;
+    if (!e.evt.shiftKey) setTokensSelecionados([]);
   };
 
   useEffect(() => {
@@ -89,12 +113,16 @@ export default function MesaRPG() {
 
   // Movimentação Fluida (Solo e em Grupo) 🚚
   const handleDragStart = (e, idLider) => {
+    const grupo = tokensSelecionados.includes(idLider)
+      ? tokensSelecionados
+      : [idLider];
     const mapaPosicoes = {};
     tokens.forEach((tk) => {
-      if (tk.id === idLider || tokensSelecionados.includes(tk.id)) {
+      if (grupo.includes(tk.id)) {
         mapaPosicoes[tk.id] = { x: tk.x, y: tk.y };
       }
     });
+    setGrupoArrastado(grupo);
     setPosicoesIniciais(mapaPosicoes);
   };
 
@@ -113,7 +141,7 @@ export default function MesaRPG() {
         if (tk.id === idLider) {
           return { ...tk, x: xAtualLider, y: yAtualLider };
         }
-        if (tokensSelecionados.includes(tk.id)) {
+        if (grupoArrastado.includes(tk.id)) {
           const inicio = posicoesIniciais[tk.id];
           if (inicio) {
             return {
@@ -150,7 +178,7 @@ export default function MesaRPG() {
     const deltaY = yLiderNovo - inicioLider.y;
 
     const novosTokens = tokens.map((tk) => {
-      if (tk.id === idLider || tokensSelecionados.includes(tk.id)) {
+      if (grupoArrastado.includes(tk.id)) {
         const inicio = posicoesIniciais[tk.id] || { x: tk.x, y: tk.y };
         return {
           ...tk,
@@ -163,6 +191,133 @@ export default function MesaRPG() {
 
     setTokens(novosTokens);
     setPosicoesIniciais({});
+    setGrupoArrastado([]);
+  };
+
+  const obterRetanguloSelecao = (area) => ({
+    esquerda: Math.min(area.x1, area.x2),
+    direita: Math.max(area.x1, area.x2),
+    topo: Math.min(area.y1, area.y2),
+    base: Math.max(area.y1, area.y2),
+  });
+
+  const finalizarSelecaoArea = () => {
+    if (!selecaoArea) return;
+    selecaoAreaConcluida.current = true;
+    const retangulo = obterRetanguloSelecao(selecaoArea);
+    const idsDentro = tokens
+      .filter((tk) => {
+        const raio = (TAMANHO_GRID / 2 - 2) * (tk.escala || 1);
+        return tk.x - raio >= retangulo.esquerda &&
+          tk.x + raio <= retangulo.direita &&
+          tk.y - raio >= retangulo.topo &&
+          tk.y + raio <= retangulo.base;
+      })
+      .map((tk) => tk.id);
+
+    setTokensSelecionados((atuais) => selecaoArea.adicionar
+      ? [...new Set([...atuais, ...idsDentro])]
+      : idsDentro);
+    setSelecaoArea(null);
+  };
+
+  const tokensDoGrupo = tokens.filter((tk) => tokensSelecionados.includes(tk.id));
+  const limitesGrupo = tokensDoGrupo.length > 0 ? {
+    esquerda: Math.min(...tokensDoGrupo.map((tk) => tk.x - (TAMANHO_GRID / 2 - 2) * (tk.escala || 1))) - 8,
+    direita: Math.max(...tokensDoGrupo.map((tk) => tk.x + (TAMANHO_GRID / 2 - 2) * (tk.escala || 1))) + 8,
+    topo: Math.min(...tokensDoGrupo.map((tk) => tk.y - (TAMANHO_GRID / 2 - 2) * (tk.escala || 1))) - 8,
+    base: Math.max(...tokensDoGrupo.map((tk) => tk.y + (TAMANHO_GRID / 2 - 2) * (tk.escala || 1))) + 8,
+  } : null;
+
+  const espelharGrupo = (eixo) => {
+    if (!limitesGrupo) return;
+    const centro = eixo === 'horizontal'
+      ? (limitesGrupo.esquerda + limitesGrupo.direita) / 2
+      : (limitesGrupo.topo + limitesGrupo.base) / 2;
+    setTokens((atuais) => atuais.map((tk) => {
+      if (!tokensSelecionados.includes(tk.id)) return tk;
+      return eixo === 'horizontal'
+        ? { ...tk, x: centro * 2 - tk.x }
+        : { ...tk, y: centro * 2 - tk.y };
+    }));
+  };
+
+  const iniciarRedimensionamento = (canto) => {
+    if (!limitesGrupo) return;
+    const ancora = {
+      x: canto.includes('e') ? limitesGrupo.esquerda : limitesGrupo.direita,
+      y: canto.includes('s') ? limitesGrupo.topo : limitesGrupo.base,
+    };
+    redimensionamentoGrupo.current = {
+      ancora,
+      limites: { ...limitesGrupo },
+      posicoes: Object.fromEntries(tokensDoGrupo.map((tk) => [tk.id, {
+        x: tk.x, y: tk.y, escala: tk.escala || 1,
+      }])),
+    };
+  };
+
+  const moverAlcaRedimensionamento = (e) => {
+    const inicio = redimensionamentoGrupo.current;
+    if (!inicio) return;
+    const larguraInicial = Math.max(1, inicio.limites.direita - inicio.limites.esquerda);
+    const alturaInicial = Math.max(1, inicio.limites.base - inicio.limites.topo);
+    const escalaX = Math.max(0.25, Math.min(4, Math.abs(e.target.x() - inicio.ancora.x) / larguraInicial));
+    const escalaY = Math.max(0.25, Math.min(4, Math.abs(e.target.y() - inicio.ancora.y) / alturaInicial));
+    const escala = (escalaX + escalaY) / 2;
+    setTokens((atuais) => atuais.map((tk) => {
+      const origem = inicio.posicoes[tk.id];
+      if (!origem) return tk;
+      return {
+        ...tk,
+        x: inicio.ancora.x + (origem.x - inicio.ancora.x) * escala,
+        y: inicio.ancora.y + (origem.y - inicio.ancora.y) * escala,
+        escala: Math.max(0.25, Math.min(4, origem.escala * escala)),
+      };
+    }));
+  };
+
+  const finalizarRedimensionamento = () => {
+    redimensionamentoGrupo.current = null;
+  };
+
+  const iniciarArrasteMoldura = () => {
+    posicoesGrupoMoldura.current = {
+      posicoes: Object.fromEntries(tokensDoGrupo.map((tk) => [tk.id, { x: tk.x, y: tk.y }])),
+      limites: { ...limitesGrupo },
+    };
+  };
+
+  const moverGrupoPelaMoldura = (e) => {
+    if (!posicoesGrupoMoldura.current) return;
+    const { posicoes, limites } = posicoesGrupoMoldura.current;
+    const deltaX = e.target.x() - limites.esquerda;
+    const deltaY = e.target.y() - limites.topo;
+    setTokens((atuais) => atuais.map((tk) => {
+      const inicio = posicoes[tk.id];
+      return inicio ? { ...tk, x: inicio.x + deltaX, y: inicio.y + deltaY } : tk;
+    }));
+  };
+
+  const finalizarArrasteMoldura = (e) => {
+    if (!posicoesGrupoMoldura.current) return;
+    const { posicoes, limites } = posicoesGrupoMoldura.current;
+    const raio = TAMANHO_GRID / 2;
+    let deltaX = Math.round((e.target.x() - limites.esquerda) / TAMANHO_GRID) * TAMANHO_GRID;
+    let deltaY = Math.round((e.target.y() - limites.topo) / TAMANHO_GRID) * TAMANHO_GRID;
+    const grupo = Object.values(posicoes);
+    const minX = Math.min(...grupo.map((p) => p.x - raio));
+    const maxX = Math.max(...grupo.map((p) => p.x + raio));
+    const minY = Math.min(...grupo.map((p) => p.y - raio));
+    const maxY = Math.max(...grupo.map((p) => p.y + raio));
+    deltaX = Math.max(raio - minX, Math.min(tamanhoPalco.largura - raio - maxX, deltaX));
+    deltaY = Math.max(raio - minY, Math.min(tamanhoPalco.altura - raio - maxY, deltaY));
+    setTokens((atuais) => atuais.map((tk) => {
+      const inicio = posicoes[tk.id];
+      return inicio ? { ...tk, x: inicio.x + deltaX, y: inicio.y + deltaY } : tk;
+    }));
+    posicoesGrupoMoldura.current = null;
+    e.target.position({ x: limites.esquerda + deltaX, y: limites.topo + deltaY });
   };
 
   // Carregar Mapa de Imagem 📂
@@ -207,88 +362,30 @@ export default function MesaRPG() {
     return (quantidadeQuadrados * METROS_POR_QUADRADO).toFixed(1);
   };
 
-  // Linhas do Grid 📐
-  const linhasGrid = [];
-  for (let i = 0; i < tamanhoPalco.largura / TAMANHO_GRID; i++) {
-    linhasGrid.push(
-      <Line
-        key={`v-${i}`}
-        points={[i * TAMANHO_GRID, 0, i * TAMANHO_GRID, tamanhoPalco.altura]}
-        stroke="rgba(255,255,255,0.2)"
-        strokeWidth={1}
-      />
-    );
-  }
-  for (let j = 0; j < tamanhoPalco.altura / TAMANHO_GRID; j++) {
-    linhasGrid.push(
-      <Line
-        key={`h-${j}`}
-        points={[0, j * TAMANHO_GRID, tamanhoPalco.largura, j * TAMANHO_GRID]}
-        stroke="rgba(255,255,255,0.2)"
-        strokeWidth={1}
-      />
-    );
-  }
-
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', background: '#1a1a1a', overflow: 'hidden' }}>
       
-      {/* Barra de Ferramentas Flutuante 🎛️ */}
-      <div style={{ position: 'absolute', top: 20, left: 20, zIndex: 10, display: 'flex', gap: '10px', alignItems: 'center' }}>
-        <button onClick={alternarToken} style={{ padding: '10px 20px', cursor: 'pointer' }}>
-          + Novo Token
-        </button>
+      <MesaToolbar
+        medindo={medindo}
+        quantidadeSelecionada={tokensSelecionados.length}
+        onNovoToken={alternarToken}
+        onCarregarMapa={handleCarregarMapa}
+        onAlternarMedicao={alternarMedindo}
+        onExcluirSelecionados={removerTokensSelecionados}
+      />
 
-        <label style={{ backgroundColor: '#007bff', color: 'white', padding: '10px 20px', borderRadius: '4px', cursor: 'pointer' }}>
-          🗺️ Carregar Mapa
-          <input type="file" accept="image/*" onChange={handleCarregarMapa} style={{ display: 'none' }} />
-        </label>
-
-        <button 
-          onClick={alternarMedindo} 
-          style={{ 
-            padding: '10px 20px', 
-            cursor: 'pointer', 
-            backgroundColor: medindo ? '#ffcc00' : '#e0e0e0', 
-            color: medindo ? '#000' : '#333', 
-            fontWeight: medindo ? 'bold' : 'normal',
-            border: 'none',
-            borderRadius: '4px'
-          }}
-        >
-          {medindo ? '📏 Medindo...' : '📏 Medir'}
-        </button>
-
-        {tokensSelecionados.length > 0 && (
-          <button 
-            onClick={removerTokensSelecionados} 
-            style={{ 
-              padding: '10px 20px', 
-              backgroundColor: '#ff4444', 
-              color: 'white', 
-              border: 'none', 
-              borderRadius: '4px', 
-              cursor: 'pointer' 
-            }}
-          >
-            🗑️ Excluir Selecionados ({tokensSelecionados.length})
-          </button>
-        )}
-      </div>
-
-      {/* Modal de Criação de Token 🪟 */}
       {janelaToken && (
-        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'white', padding: '20px', borderRadius: '8px', zIndex: 20, display: 'flex', flexDirection: 'column', gap: '10px', boxShadow: '0 0 15px rgba(0,0,0,0.5)' }}>
-          <h3>Criar Personagem</h3>
-          <label>Quantidade:</label>
-          <input type="number" min="1" value={quantTokens} onChange={(e) => setQuantTokens(Number(e.target.value))} />
-          <label>Cor do Token:</label>
-          <input type="color" value={corSelecionada} onChange={(e) => setCorSelecionada(e.target.value)} />
-          <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-            <button onClick={criarNovoToken}>Criar</button>
-            <button onClick={alternarToken}>Cancelar</button>
-          </div>
-        </div>
+        <TokenModal
+          quantidade={quantTokens}
+          cor={corSelecionada}
+          imagem={imagemToken}
+          onQuantidadeChange={setQuantTokens}
+          onCorChange={setCorSelecionada}
+          onImagemChange={selecionarImagemToken}
+          onLimparImagem={() => setImagemToken(null)}
+          onCriar={criarNovoToken}
+          onFechar={alternarToken}
+        />
       )}
 
       {/* O Palco do Konva 🎬 */}
@@ -300,10 +397,20 @@ export default function MesaRPG() {
         onClick={(e) => {
           // Limpa a seleção ao clicar no fundo
           if (e.target === e.target.getStage() && !medindo) {
-            setTokensSelecionados([]);
+            if (selecaoAreaConcluida.current) {
+              selecaoAreaConcluida.current = false;
+            } else {
+              setTokensSelecionados([]);
+            }
           }
         }}
         onMouseDown={(e) => {
+          // Arrastar em uma área vazia cria uma seleção retangular.
+          if (e.evt.button === 0 && !medindo && e.target === e.target.getStage()) {
+            const stage = e.target.getStage();
+            const pos = stage.getRelativePointerPosition();
+            setSelecaoArea({ x1: pos.x, y1: pos.y, x2: pos.x, y2: pos.y, adicionar: e.evt.shiftKey });
+          }
           // Arrastar Mapa com Botão Direito (Pan)
           if (e.evt.button === 2) {
             const stage = e.target.getStage();
@@ -319,6 +426,10 @@ export default function MesaRPG() {
           }
         }}
         onMouseMove={(e) => {
+          if (selecaoArea) {
+            const pos = e.target.getStage().getRelativePointerPosition();
+            setSelecaoArea((area) => area && ({ ...area, x2: pos.x, y2: pos.y }));
+          }
           if (medindo && pontoInicial) {
             const stage = e.target.getStage();
             const pos = stage.getRelativePointerPosition();
@@ -326,6 +437,7 @@ export default function MesaRPG() {
           }
         }}
         onMouseUp={(e) => {
+          if (selecaoArea && e.evt.button === 0) finalizarSelecaoArea();
           if (e.evt.button === 2) {
             const stage = e.target.getStage();
             stage.draggable(false);
@@ -342,73 +454,45 @@ export default function MesaRPG() {
         </Layer>
 
         {/* Camada 2: Grid 📐 */}
-        <Layer>{linhasGrid}</Layer>
+        <GridLayer
+          largura={tamanhoPalco.largura}
+          altura={tamanhoPalco.altura}
+          tamanhoCelula={TAMANHO_GRID}
+        />
 
         {/* Camada 3: Tokens 🪙 */}
         <Layer>
+          <SelectionRectangle area={selecaoArea} obterLimites={obterRetanguloSelecao} />
+          <TokenGroupControls
+            limites={limitesGrupo}
+            visivel={!medindo}
+            onArrasteMolduraInicio={iniciarArrasteMoldura}
+            onArrasteMoldura={moverGrupoPelaMoldura}
+            onArrasteMolduraFim={finalizarArrasteMoldura}
+            onRedimensionarInicio={iniciarRedimensionamento}
+            onRedimensionar={moverAlcaRedimensionamento}
+            onRedimensionarFim={finalizarRedimensionamento}
+            onEspelharHorizontal={() => espelharGrupo('horizontal')}
+            onEspelharVertical={() => espelharGrupo('vertical')}
+          />
           {tokens.map((tk) => (
-            <Circle
+            <TokenNode
               key={tk.id}
-              x={tk.x}
-              y={tk.y}
-              radius={TAMANHO_GRID / 2 - 2}
-              fill={tk.cor}
-              stroke={tokensSelecionados.includes(tk.id) ? '#ffff00' : 'white'}
-              strokeWidth={tokensSelecionados.includes(tk.id) ? 4 : 2}
-              draggable={!medindo}
-              onClick={(e) => {
-                if (!medindo) {
-                  e.cancelBubble = true;
-                  const comShift = e.evt.shiftKey;
-                  if (comShift) {
-                    setTokensSelecionados((prev) =>
-                      prev.includes(tk.id)
-                        ? prev.filter((id) => id !== tk.id)
-                        : [...prev, tk.id]
-                    );
-                  } else {
-                    setTokensSelecionados([tk.id]); // ✅ Corrigido tk.id
-                  }
-                }
-              }}
-              onDblClick={(e) => {
-                e.cancelBubble = true;
-                if (!e.evt.shiftKey) {
-                  setTokensSelecionados([]);
-                }
-              }}
-              onDragStart={(e) => handleDragStart(e, tk.id)}
-              onDragMove={(e) => handleDragMove(e, tk.id)}
-              onDragEnd={(e) => handleDragEnd(e, tk.id)}
-              onMouseEnter={(e) => {
-                e.target.getStage().container().style.cursor = 'pointer';
-              }}
-              onMouseLeave={(e) => {
-                e.target.getStage().container().style.cursor = 'default';
-              }}
+              token={tk}
+              raio={TAMANHO_GRID / 2 - 2}
+              selecionado={tokensSelecionados.includes(tk.id)}
+              medindo={medindo}
+              onSelecionar={selecionarToken}
+              onDuploClique={limparSelecaoNoDuploClique}
+              onArrasteInicio={handleDragStart}
+              onArraste={handleDragMove}
+              onArrasteFim={handleDragEnd}
             />
           ))}
         </Layer>
 
         {/* Camada 4: Régua de Medição 📏 */}
-        {pontoInicial && pontoAtual && (
-          <Layer>
-            <Line
-              points={[pontoInicial.x, pontoInicial.y, pontoAtual.x, pontoAtual.y]}
-              stroke="#ffcc00"
-              strokeWidth={3}
-              dash={[10, 5]}
-            />
-            <Text
-              x={(pontoInicial.x + pontoAtual.x) / 2}
-              y={(pontoInicial.y + pontoAtual.y) / 2 - 15}
-              text={`${calcularDistancia(pontoInicial, pontoAtual)} m`}
-              fontSize={18}
-              fill="white"
-              fontStyle="bold"
-            />
-          </Layer>
-        )}
+        <MeasurementLayer inicio={pontoInicial} atual={pontoAtual} distancia={calcularDistancia} />
       </Stage>
     </div>
   );
