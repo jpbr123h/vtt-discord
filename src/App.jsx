@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Stage, Layer } from 'react-konva';
+import { Stage, Layer, Line, Text, Rect, Group } from 'react-konva';
 import MapaImagem from './components/MapaImagem';
 import MesaToolbar from './components/MesaToolbar';
 import TokenModal from './components/TokenModal';
@@ -8,6 +8,7 @@ import TokenNode from './components/TokenNode';
 import GridLayer from './components/GridLayer';
 import MeasurementLayer from './components/MeasurementLayer';
 import SelectionRectangle from './components/SelectionRectangle';
+import CanvasTextEditor from './components/CanvasTextEditor';
 import './App.css';
 
 const TAMANHO_GRID = 50;
@@ -29,6 +30,23 @@ export default function MesaRPG() {
   const [imagemToken, setImagemToken] = useState(null);
   const [quantTokens, setQuantTokens] = useState(1);
   const [urlMapa, setUrlMapa] = useState(null);
+  const [ferramenta, setFerramenta] = useState('selecionar');
+  const [anotacoes, setAnotacoes] = useState([]);
+  const [anotacaoSelecionada, setAnotacaoSelecionada] = useState(null);
+  const [anotacoesSelecionadas, setAnotacoesSelecionadas] = useState([]);
+  const [abrirPainelAnotacao, setAbrirPainelAnotacao] = useState(false);
+  const [menuToken, setMenuToken] = useState(null);
+  const [corAnotacao, setCorAnotacao] = useState('#ffcc00');
+  const [espessuraTraco, setEspessuraTraco] = useState(5);
+  const [textoAnotacao, setTextoAnotacao] = useState('');
+  const [fonteAnotacao, setFonteAnotacao] = useState('Arial, sans-serif');
+  const [tamanhoFonte, setTamanhoFonte] = useState(20);
+  const [espacoTexto, setEspacoTexto] = useState({ boxWidth: 220, boxHeight: 72 });
+  const [editorTexto, setEditorTexto] = useState(null);
+  const stageRef = useRef(null);
+  const tracoAtual = useRef(null);
+  const arrasteAnotacoes = useRef(null);
+  const anotacoesNoArrasteToken = useRef(null);
 
   // Estados de medição (Régua) 📏
   const [medindo, setMedindo] = useState(false);
@@ -47,6 +65,88 @@ export default function MesaRPG() {
     setPontoInicial(null);
     setPontoAtual(null);
     setTokensSelecionados([]); // Limpa a seleção ao alternar
+  };
+
+  const limparAnotacoes = () => setAnotacoes([]);
+
+  const selecionarAnotacao = (e, id) => {
+    e.cancelBubble = true;
+    setAbrirPainelAnotacao(!e.evt.shiftKey);
+    if (e.evt.shiftKey) {
+      const proximas = anotacoesSelecionadas.includes(id)
+        ? anotacoesSelecionadas.filter((itemId) => itemId !== id)
+        : [...anotacoesSelecionadas, id];
+      setAnotacoesSelecionadas(proximas);
+      setAnotacaoSelecionada(proximas.includes(id) ? id : (proximas[0] || null));
+    } else {
+      setTokensSelecionados([]);
+      setAnotacaoSelecionada(id);
+      setAnotacoesSelecionadas([id]);
+    }
+  };
+
+  const iniciarArrasteAnotacao = (e, item) => {
+    const ids = anotacoesSelecionadas.includes(item.id) ? anotacoesSelecionadas : [item.id];
+    setAnotacaoSelecionada(item.id);
+    setAnotacoesSelecionadas(ids);
+    const origens = Object.fromEntries(anotacoes.filter((anotacao) => ids.includes(anotacao.id)).map((anotacao) => [anotacao.id, {
+      x: anotacao.tipo === 'texto' ? anotacao.x : (anotacao.offsetX || 0),
+      y: anotacao.tipo === 'texto' ? anotacao.y : (anotacao.offsetY || 0),
+    }]));
+    const tokensOriginais = Object.fromEntries(tokens
+      .filter((token) => tokensSelecionados.includes(token.id))
+      .map((token) => [token.id, { x: token.x, y: token.y }]));
+    arrasteAnotacoes.current = { id: item.id, x: e.target.x(), y: e.target.y(), origens, tokensOriginais };
+  };
+
+  const moverAnotacaoSelecionada = (e) => {
+    const arraste = arrasteAnotacoes.current;
+    if (!arraste) return;
+    const dx = e.target.x() - arraste.x;
+    const dy = e.target.y() - arraste.y;
+    setAnotacoes((atuais) => atuais.map((item) => {
+      const origem = arraste.origens[item.id];
+      if (!origem) return item;
+      return item.tipo === 'texto'
+        ? { ...item, x: origem.x + dx, y: origem.y + dy }
+        : { ...item, offsetX: origem.x + dx, offsetY: origem.y + dy };
+    }));
+    setTokens((atuais) => atuais.map((token) => {
+      const origem = arraste.tokensOriginais[token.id];
+      return origem ? { ...token, x: origem.x + dx, y: origem.y + dy } : token;
+    }));
+  };
+
+  const finalizarArrasteAnotacao = () => { arrasteAnotacoes.current = null; };
+
+  useEffect(() => {
+    if (stageRef.current) {
+      stageRef.current.container().style.cursor = ferramenta === 'texto' ? 'text' : 'default';
+    }
+  }, [ferramenta]);
+
+  const salvarTextoCanvas = () => {
+    if (!editorTexto) return;
+    const texto = editorTexto.texto.trim();
+    if (texto) {
+      setAnotacoes((atuais) => {
+        const anotacao = { ...editorTexto, id: editorTexto.id, tipo: 'texto', x: editorTexto.x, y: editorTexto.y, texto, cor: editorTexto.cor, fontFamily: editorTexto.fontFamily || fonteAnotacao, fontSize: editorTexto.fontSize || tamanhoFonte };
+        return atuais.some((item) => item.id === anotacao.id)
+          ? atuais.map((item) => item.id === anotacao.id ? anotacao : item)
+          : [...atuais, anotacao];
+      });
+      setAnotacaoSelecionada(editorTexto.id);
+      setAnotacoesSelecionadas([editorTexto.id]);
+    } else {
+      setAnotacoes((atuais) => atuais.filter((item) => item.id !== editorTexto.id));
+    }
+    setEditorTexto(null);
+    setFerramenta('selecionar');
+  };
+
+  const redimensionarTexto = (id, dimensoes) => {
+    setAnotacoes((atuais) => atuais.map((item) => item.id === id ? { ...item, ...dimensoes } : item));
+    setEditorTexto((atual) => atual?.id === id ? { ...atual, ...dimensoes } : atual);
   };
 
   // Alternar modal e Criar Tokens 🪙
@@ -85,8 +185,13 @@ export default function MesaRPG() {
   };
 
   const selecionarToken = (e, id) => {
-    if (medindo) return;
+    if (medindo || ferramenta !== 'selecionar') return;
     e.cancelBubble = true;
+    if (!e.evt.shiftKey) {
+      setAnotacoesSelecionadas([]);
+      setAnotacaoSelecionada(null);
+      setAbrirPainelAnotacao(false);
+    }
     if (e.evt.shiftKey) {
       setTokensSelecionados((atuais) => atuais.includes(id)
         ? atuais.filter((tokenId) => tokenId !== id)
@@ -124,6 +229,12 @@ export default function MesaRPG() {
     });
     setGrupoArrastado(grupo);
     setPosicoesIniciais(mapaPosicoes);
+    anotacoesNoArrasteToken.current = Object.fromEntries(anotacoes
+      .filter((item) => anotacoesSelecionadas.includes(item.id))
+      .map((item) => [item.id, {
+        x: item.tipo === 'texto' ? item.x : (item.offsetX || 0),
+        y: item.tipo === 'texto' ? item.y : (item.offsetY || 0),
+      }]));
   };
 
   const handleDragMove = (e, idLider) => {
@@ -154,6 +265,14 @@ export default function MesaRPG() {
         return tk;
       })
     );
+    const anotacoesOriginais = anotacoesNoArrasteToken.current || {};
+    setAnotacoes((atuais) => atuais.map((item) => {
+      const origem = anotacoesOriginais[item.id];
+      if (!origem) return item;
+      return item.tipo === 'texto'
+        ? { ...item, x: origem.x + deltaX, y: origem.y + deltaY }
+        : { ...item, offsetX: origem.x + deltaX, offsetY: origem.y + deltaY };
+    }));
   };
 
   const handleDragEnd = (e, idLider) => {
@@ -190,6 +309,15 @@ export default function MesaRPG() {
     });
 
     setTokens(novosTokens);
+    const anotacoesOriginais = anotacoesNoArrasteToken.current || {};
+    setAnotacoes((atuais) => atuais.map((item) => {
+      const origem = anotacoesOriginais[item.id];
+      if (!origem) return item;
+      return item.tipo === 'texto'
+        ? { ...item, x: origem.x + deltaX, y: origem.y + deltaY }
+        : { ...item, offsetX: origem.x + deltaX, offsetY: origem.y + deltaY };
+    }));
+    anotacoesNoArrasteToken.current = null;
     setPosicoesIniciais({});
     setGrupoArrastado([]);
   };
@@ -208,13 +336,31 @@ export default function MesaRPG() {
     const idsDentro = tokens
       .filter((tk) => {
         const raio = (TAMANHO_GRID / 2 - 2) * (tk.escala || 1);
-        return tk.x - raio >= retangulo.esquerda &&
-          tk.x + raio <= retangulo.direita &&
-          tk.y - raio >= retangulo.topo &&
-          tk.y + raio <= retangulo.base;
+        return tk.x - raio >= retangulo.esquerda && tk.x + raio <= retangulo.direita &&
+          tk.y - raio >= retangulo.topo && tk.y + raio <= retangulo.base;
       })
       .map((tk) => tk.id);
+    const anotacoesDentro = anotacoes.filter((item) => {
+      let limites;
+      if (item.tipo === 'traco') {
+        const xs = item.pontos.filter((_, i) => i % 2 === 0).map((x) => x + (item.offsetX || 0));
+        const ys = item.pontos.filter((_, i) => i % 2 === 1).map((y) => y + (item.offsetY || 0));
+        const margem = item.espessura / 2;
+        limites = { esquerda: Math.min(...xs) - margem, direita: Math.max(...xs) + margem, topo: Math.min(...ys) - margem, base: Math.max(...ys) + margem };
+      } else {
+        const largura = item.boxWidth || Math.max(48, Math.max(...item.texto.split('\n').map((linha) => linha.length)) * (item.fontSize || 20) * 0.62 + 16);
+        const altura = item.boxHeight || item.texto.split('\n').length * (item.fontSize || 20) * 1.25 + 12;
+        limites = { esquerda: item.x, direita: item.x + largura, topo: item.y, base: item.y + altura };
+      }
+      return limites.esquerda >= retangulo.esquerda && limites.direita <= retangulo.direita &&
+        limites.topo >= retangulo.topo && limites.base <= retangulo.base;
+    }).map((item) => item.id);
 
+    setAnotacoesSelecionadas((atuais) => selecaoArea.adicionar
+      ? [...new Set([...atuais, ...anotacoesDentro])]
+      : anotacoesDentro);
+    setAnotacaoSelecionada(anotacoesDentro[0] || null);
+    setAbrirPainelAnotacao(false);
     setTokensSelecionados((atuais) => selecaoArea.adicionar
       ? [...new Set([...atuais, ...idsDentro])]
       : idsDentro);
@@ -222,12 +368,41 @@ export default function MesaRPG() {
   };
 
   const tokensDoGrupo = tokens.filter((tk) => tokensSelecionados.includes(tk.id));
+  const anotacoesDoGrupo = anotacoes.filter((item) => anotacoesSelecionadas.includes(item.id));
+  const limitesAnotacoes = anotacoesDoGrupo.length ? (() => {
+    const caixas = anotacoesDoGrupo.map((item) => {
+      if (item.tipo === 'texto') {
+        const largura = item.boxWidth || Math.max(48, Math.max(...item.texto.split('\n').map((linha) => linha.length)) * (item.fontSize || 20) * 0.62 + 16);
+        const altura = item.boxHeight || item.texto.split('\n').length * (item.fontSize || 20) * 1.25 + 12;
+        return { esquerda: item.x, direita: item.x + largura, topo: item.y, base: item.y + altura };
+      }
+      const xs = item.pontos.filter((_, indice) => indice % 2 === 0).map((x) => x + (item.offsetX || 0));
+      const ys = item.pontos.filter((_, indice) => indice % 2 === 1).map((y) => y + (item.offsetY || 0));
+      return { esquerda: Math.min(...xs), direita: Math.max(...xs), topo: Math.min(...ys), base: Math.max(...ys) };
+    });
+    return {
+      esquerda: Math.min(...caixas.map((caixa) => caixa.esquerda)) - 8,
+      direita: Math.max(...caixas.map((caixa) => caixa.direita)) + 8,
+      topo: Math.min(...caixas.map((caixa) => caixa.topo)) - 8,
+      base: Math.max(...caixas.map((caixa) => caixa.base)) + 8,
+    };
+  })() : null;
   const limitesGrupo = tokensDoGrupo.length > 0 ? {
     esquerda: Math.min(...tokensDoGrupo.map((tk) => tk.x - (TAMANHO_GRID / 2 - 2) * (tk.escala || 1))) - 8,
     direita: Math.max(...tokensDoGrupo.map((tk) => tk.x + (TAMANHO_GRID / 2 - 2) * (tk.escala || 1))) + 8,
     topo: Math.min(...tokensDoGrupo.map((tk) => tk.y - (TAMANHO_GRID / 2 - 2) * (tk.escala || 1))) - 8,
     base: Math.max(...tokensDoGrupo.map((tk) => tk.y + (TAMANHO_GRID / 2 - 2) * (tk.escala || 1))) + 8,
   } : null;
+  const limitesItensSelecionados = (() => {
+    if (!limitesAnotacoes) return limitesGrupo;
+    if (!limitesGrupo) return limitesAnotacoes;
+    return {
+      esquerda: Math.min(limitesAnotacoes.esquerda, limitesGrupo.esquerda),
+      direita: Math.max(limitesAnotacoes.direita, limitesGrupo.direita),
+      topo: Math.min(limitesAnotacoes.topo, limitesGrupo.topo),
+      base: Math.max(limitesAnotacoes.base, limitesGrupo.base),
+    };
+  })();
 
   const espelharGrupo = (eixo) => {
     if (!limitesGrupo) return;
@@ -367,10 +542,59 @@ export default function MesaRPG() {
       
       <MesaToolbar
         medindo={medindo}
+        ferramenta={ferramenta}
+        corAnotacao={corAnotacao}
+        espessuraTraco={espessuraTraco}
+        textoAnotacao={textoAnotacao}
+        quantidadeAnotacoes={anotacoes.length}
+        quantidadeAnotacoesSelecionadas={anotacoesSelecionadas.length}
+        mostrarOpcoesAnotacao={abrirPainelAnotacao}
+        anotacaoSelecionada={anotacoes.find((item) => item.id === anotacaoSelecionada) || null}
+        onAnotacaoChange={(id, alteracoes) => {
+          setAnotacoes((atuais) => atuais.map((item) => item.id === id ? { ...item, ...alteracoes } : item));
+          setEditorTexto((atual) => atual?.id === id ? { ...atual, ...alteracoes } : atual);
+        }}
+        onDeselecionarAnotacao={() => setAnotacaoSelecionada(null)}
+        fonteAnotacao={fonteAnotacao}
+        onFonteAnotacaoChange={(fonte) => {
+          setFonteAnotacao(fonte);
+          setEditorTexto((atual) => atual ? { ...atual, fontFamily: fonte } : atual);
+        }}
+        tamanhoFonte={tamanhoFonte}
+        onTamanhoFonteChange={(tamanho) => {
+          setTamanhoFonte(tamanho);
+          setEditorTexto((atual) => atual ? { ...atual, fontSize: tamanho } : atual);
+        }}
+        espacoTexto={editorTexto ? { boxWidth: editorTexto.boxWidth || espacoTexto.boxWidth, boxHeight: editorTexto.boxHeight || espacoTexto.boxHeight } : espacoTexto}
+        onEspacoTextoChange={(dimensoes) => {
+          setEspacoTexto((atual) => ({ ...atual, ...dimensoes }));
+          setEditorTexto((atual) => atual ? { ...atual, ...dimensoes } : atual);
+        }}
+        onExcluirAnotacao={() => {
+          setAnotacoes((atuais) => atuais.filter((item) => item.id !== anotacaoSelecionada));
+          setAnotacaoSelecionada(null);
+        }}
+        onFerramentaChange={(proxima) => {
+          const novaFerramenta = ferramenta === proxima && proxima !== 'selecionar' ? 'selecionar' : proxima;
+          if (ferramenta === 'texto' && novaFerramenta !== 'texto' && editorTexto) salvarTextoCanvas();
+          setFerramenta(novaFerramenta);
+          setAnotacaoSelecionada(null);
+          setMedindo(false);
+          setPontoInicial(null);
+          setPontoAtual(null);
+          setTokensSelecionados([]);
+        }}
+        onCorAnotacaoChange={setCorAnotacao}
+        onEspessuraTracoChange={setEspessuraTraco}
+        onTextoAnotacaoChange={setTextoAnotacao}
+        onLimparAnotacoes={limparAnotacoes}
         quantidadeSelecionada={tokensSelecionados.length}
         onNovoToken={alternarToken}
         onCarregarMapa={handleCarregarMapa}
-        onAlternarMedicao={alternarMedindo}
+        onAlternarMedicao={() => {
+          setFerramenta('selecionar');
+          alternarMedindo();
+        }}
         onExcluirSelecionados={removerTokensSelecionados}
       />
 
@@ -388,25 +612,53 @@ export default function MesaRPG() {
         />
       )}
 
+      {menuToken && (() => {
+        const token = tokens.find((item) => item.id === menuToken.id);
+        if (!token) return null;
+        const atualizarToken = (alteracoes) => setTokens((atuais) => atuais.map((item) => item.id === token.id ? { ...item, ...alteracoes } : item));
+        const fechar = () => setMenuToken(null);
+        return (
+          <div className="token-contextual" style={{ left: menuToken.x, top: menuToken.y }} onMouseDown={(e) => e.stopPropagation()}>
+            <strong>Token</strong>
+            <label className="token-contextual__cor">Cor <input type="color" value={token.cor || '#ff0044'} onChange={(e) => atualizarToken({ cor: e.target.value, imagem: null })} /></label>
+            <button onClick={() => { atualizarToken({ escala: Math.min(4, (token.escala || 1) + 0.25) }); fechar(); }}>Aumentar tamanho</button>
+            <button onClick={() => { atualizarToken({ escala: Math.max(0.25, (token.escala || 1) - 0.25) }); fechar(); }}>Diminuir tamanho</button>
+            <button onClick={() => { setTokens((atuais) => [...atuais, { ...token, id: `${Date.now()}-copia`, x: Math.min(tamanhoPalco.largura - 25, token.x + TAMANHO_GRID), y: Math.min(tamanhoPalco.altura - 25, token.y + TAMANHO_GRID) }]); fechar(); }}>Duplicar token</button>
+            <button className="token-contextual__excluir" onClick={() => { setTokens((atuais) => atuais.filter((item) => item.id !== token.id)); setTokensSelecionados((atuais) => atuais.filter((id) => id !== token.id)); fechar(); }}>Excluir token</button>
+          </div>
+        );
+      })()}
+
       {/* O Palco do Konva 🎬 */}
       <Stage
+        ref={stageRef}
         width={window.innerWidth}
         height={window.innerHeight}
         onWheel={handleWheel}
         onContextMenu={(e) => e.evt.preventDefault()}
         onClick={(e) => {
+          if (ferramenta === 'texto') {
+            if (editorTexto) return;
+            const pos = e.target.getStage().getRelativePointerPosition();
+            setEditorTexto({ id: `${Date.now()}-${Math.random()}`, x: pos.x, y: pos.y, texto: '', cor: corAnotacao, fontFamily: fonteAnotacao, fontSize: tamanhoFonte, ...espacoTexto });
+            return;
+          }
           // Limpa a seleção ao clicar no fundo
           if (e.target === e.target.getStage() && !medindo) {
+            setMenuToken(null);
             if (selecaoAreaConcluida.current) {
               selecaoAreaConcluida.current = false;
             } else {
+              setAnotacaoSelecionada(null);
+              setAnotacoesSelecionadas([]);
+              setAbrirPainelAnotacao(false);
               setTokensSelecionados([]);
             }
           }
         }}
         onMouseDown={(e) => {
           // Arrastar em uma área vazia cria uma seleção retangular.
-          if (e.evt.button === 0 && !medindo && e.target === e.target.getStage()) {
+          if (e.evt.button === 0 && !medindo && ferramenta === 'selecionar' && e.target === e.target.getStage()) {
             const stage = e.target.getStage();
             const pos = stage.getRelativePointerPosition();
             setSelecaoArea({ x1: pos.x, y1: pos.y, x2: pos.x, y2: pos.y, adicionar: e.evt.shiftKey });
@@ -424,8 +676,15 @@ export default function MesaRPG() {
             setPontoInicial(pos);
             setPontoAtual(pos);
           }
+          if (e.evt.button === 0 && ferramenta === 'desenhar' && e.target === e.target.getStage()) {
+            const pos = e.target.getStage().getRelativePointerPosition();
+            const id = `${Date.now()}-${Math.random()}`;
+            tracoAtual.current = id;
+            setAnotacoes((atuais) => [...atuais, { id, tipo: 'traco', pontos: [pos.x, pos.y], cor: corAnotacao, espessura: espessuraTraco }]);
+          }
         }}
         onMouseMove={(e) => {
+          if (ferramenta === 'texto') e.target.getStage().container().style.cursor = 'text';
           if (selecaoArea) {
             const pos = e.target.getStage().getRelativePointerPosition();
             setSelecaoArea((area) => area && ({ ...area, x2: pos.x, y2: pos.y }));
@@ -434,6 +693,12 @@ export default function MesaRPG() {
             const stage = e.target.getStage();
             const pos = stage.getRelativePointerPosition();
             setPontoAtual(pos);
+          }
+          if (tracoAtual.current) {
+            const pos = e.target.getStage().getRelativePointerPosition();
+            setAnotacoes((atuais) => atuais.map((item) => item.id === tracoAtual.current
+              ? { ...item, pontos: [...item.pontos, pos.x, pos.y] }
+              : item));
           }
         }}
         onMouseUp={(e) => {
@@ -446,6 +711,7 @@ export default function MesaRPG() {
             setPontoInicial(null);
             setPontoAtual(null);
           }
+          if (e.evt.button === 0) tracoAtual.current = null;
         }}
       >
         {/* Camada 1: Mapa de Imagem 🖼️ */}
@@ -460,12 +726,63 @@ export default function MesaRPG() {
           tamanhoCelula={TAMANHO_GRID}
         />
 
+        {/* Camada de desenho e escrita */}
+        <Layer listening={ferramenta !== 'desenhar' && !medindo}>
+          {anotacoes.map((item) => item.tipo === 'traco' ? (
+            <Line key={item.id} points={item.pontos} stroke={item.cor} strokeWidth={item.espessura}
+              x={item.offsetX || 0} y={item.offsetY || 0}
+              listening={ferramenta === 'selecionar' && !medindo}
+              shadowColor={anotacoesSelecionadas.includes(item.id) ? '#53a9ff' : undefined}
+              shadowBlur={anotacoesSelecionadas.includes(item.id) ? 8 : 0}
+              draggable={ferramenta === 'selecionar' && !medindo}
+              lineCap="round" lineJoin="round" hitStrokeWidth={Math.max(16, item.espessura + 10)}
+              onClick={(e) => selecionarAnotacao(e, item.id)}
+              onDragStart={(e) => iniciarArrasteAnotacao(e, item)} onDragMove={moverAnotacaoSelecionada} onDragEnd={finalizarArrasteAnotacao} />
+          ) : item.id === editorTexto?.id ? null : (
+            <Group key={item.id} x={item.x} y={item.y} draggable={ferramenta === 'selecionar' && !medindo}
+              onClick={(e) => {
+                if (ferramenta === 'texto') {
+                  e.cancelBubble = true;
+                  setEditorTexto({ ...item, id: item.id, x: item.x, y: item.y, texto: item.texto, cor: item.cor, fontFamily: item.fontFamily || fonteAnotacao, fontSize: item.fontSize || tamanhoFonte });
+                } else selecionarAnotacao(e, item.id);
+              }}
+              onDblClick={(e) => { e.cancelBubble = true; setFerramenta('texto'); setEditorTexto({ ...item, id: item.id, x: item.x, y: item.y, texto: item.texto, cor: item.cor, fontFamily: item.fontFamily || fonteAnotacao, fontSize: item.fontSize || tamanhoFonte }); }}
+              onDragStart={(e) => iniciarArrasteAnotacao(e, item)} onDragMove={moverAnotacaoSelecionada} onDragEnd={finalizarArrasteAnotacao}>
+              <Rect width={item.boxWidth || Math.max(48, Math.max(...item.texto.split('\n').map((linha) => linha.length)) * (item.fontSize || 20) * 0.62 + 16)}
+                height={item.boxHeight || item.texto.split('\n').length * (item.fontSize || 20) * 1.25 + 12}
+                fill="rgba(12, 16, 24, 0)"
+                stroke={anotacoesSelecionadas.includes(item.id) ? '#53a9ff' : 'rgba(255,255,255,0.28)'}
+                strokeWidth={anotacoesSelecionadas.includes(item.id) ? 2 : 1} cornerRadius={6} />
+              <Text x={8} y={6} width={item.boxWidth ? item.boxWidth - 16 : undefined} height={item.boxHeight ? item.boxHeight - 12 : undefined}
+                text={item.texto} fill={item.cor} fontSize={item.fontSize || 20} fontStyle="bold" fontFamily={item.fontFamily || 'Arial, sans-serif'} wrap="word"
+                shadowColor="black" shadowBlur={2} shadowOpacity={0.5} />
+              {anotacaoSelecionada === item.id && ferramenta === 'selecionar' && !medindo && (() => {
+                const largura = item.boxWidth || Math.max(48, Math.max(...item.texto.split('\n').map((linha) => linha.length)) * (item.fontSize || 20) * 0.62 + 16);
+                const altura = item.boxHeight || item.texto.split('\n').length * (item.fontSize || 20) * 1.25 + 12;
+                return <Rect x={largura - 12} y={altura - 12} width={12} height={12} fill="#53a9ff" stroke="white" strokeWidth={1}
+                  draggable
+                  onMouseDown={(e) => { e.cancelBubble = true; }}
+                  onDragStart={(e) => { e.cancelBubble = true; }}
+                  onDragMove={(e) => {
+                    e.cancelBubble = true;
+                    redimensionarTexto(item.id, {
+                      boxWidth: Math.max(80, Math.min(600, e.target.x() + 12)),
+                      boxHeight: Math.max(50, Math.min(500, e.target.y() + 12)),
+                    });
+                  }}
+                  onMouseEnter={(e) => { e.target.getStage().container().style.cursor = 'nwse-resize'; }}
+                  onMouseLeave={(e) => { e.target.getStage().container().style.cursor = 'default'; }} />;
+              })()}
+            </Group>
+          ))}
+        </Layer>
+
         {/* Camada 3: Tokens 🪙 */}
         <Layer>
           <SelectionRectangle area={selecaoArea} obterLimites={obterRetanguloSelecao} />
           <TokenGroupControls
             limites={limitesGrupo}
-            visivel={!medindo}
+            visivel={!medindo && anotacoesSelecionadas.length === 0}
             onArrasteMolduraInicio={iniciarArrasteMoldura}
             onArrasteMoldura={moverGrupoPelaMoldura}
             onArrasteMolduraFim={finalizarArrasteMoldura}
@@ -481,19 +798,36 @@ export default function MesaRPG() {
               token={tk}
               raio={TAMANHO_GRID / 2 - 2}
               selecionado={tokensSelecionados.includes(tk.id)}
-              medindo={medindo}
+              medindo={medindo || ferramenta !== 'selecionar'}
+              ferramenta={ferramenta}
               onSelecionar={selecionarToken}
               onDuploClique={limparSelecaoNoDuploClique}
               onArrasteInicio={handleDragStart}
               onArraste={handleDragMove}
               onArrasteFim={handleDragEnd}
+              onMenuContexto={(e, id) => {
+                setMenuToken({ id, x: Math.min(e.evt.clientX, window.innerWidth - 220), y: Math.min(e.evt.clientY, window.innerHeight - 240) });
+                setTokensSelecionados([id]);
+              }}
             />
           ))}
         </Layer>
 
+        {anotacoesSelecionadas.length > 0 && limitesItensSelecionados && ferramenta === 'selecionar' && (
+          <Layer listening={false}>
+            <Rect x={limitesItensSelecionados.esquerda} y={limitesItensSelecionados.topo}
+              width={limitesItensSelecionados.direita - limitesItensSelecionados.esquerda}
+              height={limitesItensSelecionados.base - limitesItensSelecionados.topo}
+              stroke="#53a9ff" strokeWidth={2} dash={[7, 4]} />
+          </Layer>
+        )}
+
         {/* Camada 4: Régua de Medição 📏 */}
         <MeasurementLayer inicio={pontoInicial} atual={pontoAtual} distancia={calcularDistancia} />
       </Stage>
+      {editorTexto && <CanvasTextEditor stageRef={stageRef} editor={editorTexto}
+        onChange={(texto) => setEditorTexto((atual) => atual && ({ ...atual, texto }))}
+        onCommit={salvarTextoCanvas} onCancel={() => { setEditorTexto(null); setFerramenta('selecionar'); }} />}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { Circle, Group, Image as KonvaImage } from 'react-konva';
 import useImage from 'use-image';
 import useAnimatedGif from '../hooks/useAnimatedGif';
 
-export default function TokenNode({ token, raio, selecionado, medindo, onSelecionar, onDuploClique, onArrasteInicio, onArraste, onArrasteFim }) {
+export default function TokenNode({ token, raio, selecionado, medindo, ferramenta = 'selecionar', onSelecionar, onDuploClique, onArrasteInicio, onArraste, onArrasteFim, onMenuContexto }) {
   const [imagem] = useImage(token.imagem || '');
   const imagemGrupoRef = useRef(null);
   const gifAnimado = token.imagem?.startsWith('data:image/gif');
@@ -47,12 +47,14 @@ export default function TokenNode({ token, raio, selecionado, medindo, onSelecio
         strokeWidth={selecionado ? 4 : 2}
         draggable={!medindo}
         onClick={(e) => onSelecionar(e, token.id)}
+        onMouseDown={(e) => { if (e.evt.button === 2) e.cancelBubble = true; }}
+        onContextMenu={(e) => { e.evt.preventDefault(); e.cancelBubble = true; onMenuContexto?.(e, token.id); }}
         onDblClick={(e) => onDuploClique(e, token.id)}
         onDragStart={(e) => onArrasteInicio(e, token.id)}
         onDragMove={(e) => onArraste(e, token.id)}
         onDragEnd={(e) => onArrasteFim(e, token.id)}
-        onMouseEnter={(e) => { e.target.getStage().container().style.cursor = 'pointer'; }}
-        onMouseLeave={(e) => { e.target.getStage().container().style.cursor = 'default'; }}
+        onMouseEnter={(e) => { e.target.getStage().container().style.cursor = ferramenta === 'texto' ? 'text' : 'pointer'; }}
+        onMouseLeave={(e) => { e.target.getStage().container().style.cursor = ferramenta === 'texto' ? 'text' : 'default'; }}
       />
     </>
   );
