@@ -49,10 +49,11 @@ export default function MesaRPG() {
   const anotacoesNoArrasteToken = useRef(null);
 
   // Estados de medição (Régua) 📏
+  
   const [medindo, setMedindo] = useState(false);
   const [pontoInicial, setPontoInicial] = useState(null);
   const [pontoAtual, setPontoAtual] = useState(null);
-
+  const [medido, setmedido]=useState(false)
   // Tamanho do palco/mapa 📐
   const [tamanhoPalco, setTamanhoPalco] = useState({
     largura: window.innerWidth,
@@ -673,8 +674,16 @@ export default function MesaRPG() {
           if (medindo && e.evt.button === 0) {
             const stage = e.target.getStage();
             const pos = stage.getRelativePointerPosition();
-            setPontoInicial(pos);
-            setPontoAtual(pos);
+            if(pontoInicial== null||!medido){
+              setPontoInicial(pos);
+              setPontoAtual(null);
+              setmedido(true);
+            }else {
+              setPontoAtual(pos);
+              setmedido(false);
+            }
+            
+            
           }
           if (e.evt.button === 0 && ferramenta === 'desenhar' && e.target === e.target.getStage()) {
             const pos = e.target.getStage().getRelativePointerPosition();
@@ -689,7 +698,7 @@ export default function MesaRPG() {
             const pos = e.target.getStage().getRelativePointerPosition();
             setSelecaoArea((area) => area && ({ ...area, x2: pos.x, y2: pos.y }));
           }
-          if (medindo && pontoInicial) {
+          if (medindo && pontoInicial && medido) {
             const stage = e.target.getStage();
             const pos = stage.getRelativePointerPosition();
             setPontoAtual(pos);
@@ -708,8 +717,8 @@ export default function MesaRPG() {
             stage.draggable(false);
           }
           if (medindo && e.evt.button === 0) {
-            setPontoInicial(null);
-            setPontoAtual(null);
+            //setPontoInicial(null);
+            //setPontoAtual(null);
           }
           if (e.evt.button === 0) tracoAtual.current = null;
         }}
