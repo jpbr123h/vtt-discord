@@ -29,6 +29,8 @@ export default function MesaRPG() {
   const [corSelecionada, setCorSelecionada] = useState('#ff0044');
   const [imagemToken, setImagemToken] = useState(null);
   const [quantTokens, setQuantTokens] = useState(1);
+  const [vidatoken, setVidaToken]=useState(0);
+  const [nometoken, setNomeToken]=useState(null)
   const [urlMapa, setUrlMapa] = useState(null);
   const [ferramenta, setFerramenta] = useState('selecionar');
   const [anotacoes, setAnotacoes] = useState([]);
@@ -162,6 +164,8 @@ export default function MesaRPG() {
         y: window.innerHeight / 2,
         cor: corSelecionada,
         imagem: imagemToken,
+        mone: nometoken,
+        vida: vidatoken,
       });
     }
     setTokens([...tokens, ...novosTokens]);
@@ -602,9 +606,13 @@ export default function MesaRPG() {
       {janelaToken && (
         <TokenModal
           quantidade={quantTokens}
+          nome={nometoken}
+          vida={vidatoken}
           cor={corSelecionada}
           imagem={imagemToken}
           onQuantidadeChange={setQuantTokens}
+          onNomeChange={setNomeToken}
+          onVidaChange={setVidaToken}
           onCorChange={setCorSelecionada}
           onImagemChange={selecionarImagemToken}
           onLimparImagem={() => setImagemToken(null)}
@@ -620,7 +628,8 @@ export default function MesaRPG() {
         const fechar = () => setMenuToken(null);
         return (
           <div className="token-contextual" style={{ left: menuToken.x, top: menuToken.y }} onMouseDown={(e) => e.stopPropagation()}>
-            <strong>Token</strong>
+            <strong>Token </strong>
+            <label className="token_contextual__vida">vida <input type="number" value={token.vida}onChange={(e) => atualizarToken({vida: e.target.value})} /></label>
             <label className="token-contextual__cor">Cor <input type="color" value={token.cor || '#ff0044'} onChange={(e) => atualizarToken({ cor: e.target.value, imagem: null })} /></label>
             <button onClick={() => { atualizarToken({ escala: Math.min(4, (token.escala || 1) + 0.25) }); fechar(); }}>Aumentar tamanho</button>
             <button onClick={() => { atualizarToken({ escala: Math.max(0.25, (token.escala || 1) - 0.25) }); fechar(); }}>Diminuir tamanho</button>

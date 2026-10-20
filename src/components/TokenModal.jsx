@@ -2,9 +2,13 @@ import { ImagePlus, Plus, UserRoundPlus, X } from 'lucide-react';
 
 export default function TokenModal({
   quantidade,
+  nome,
+  vida,
   cor,
   imagem,
   onQuantidadeChange,
+  onNomeChange,
+  onVidaChange,
   onCorChange,
   onImagemChange,
   onLimparImagem,
@@ -26,6 +30,14 @@ export default function TokenModal({
         </header>
 
         <div className="token-modal__conteudo">
+          <div className="token-modal__campo">
+            <label htmlFor="token-nome">Nome</label>
+            <input type="text" id="token-name" value={(nome)} onChange={(e) => onNomeChange(Text(e.target.value))}/>
+          </div>
+          <div className='token-modal__campo'>
+            <label htmlFor="token-vida">Vida</label>
+            <input type="number" id='token-vida' value={vida} onChange={(e) => onVidaChange(Number(e.target.value))}/>
+          </div>
           <div className="token-modal__campo">
             <label htmlFor="token-quantidade">Quantidade</label>
             <input
