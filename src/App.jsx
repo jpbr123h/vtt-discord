@@ -32,6 +32,7 @@ export default function MesaRPG() {
   const [vidatoken, setVidaToken]=useState(0);
   const [nometoken, setNomeToken]=useState(null)
   const [urlMapa, setUrlMapa] = useState(null);
+  const [escrevendo, setEscrevendo] = useState(false);
   const [ferramenta, setFerramenta] = useState('selecionar');
   const [anotacoes, setAnotacoes] = useState([]);
   const [anotacaoSelecionada, setAnotacaoSelecionada] = useState(null);
@@ -67,6 +68,7 @@ export default function MesaRPG() {
     setMedindo(!medindo);
     setPontoInicial(null);
     setPontoAtual(null);
+    setMenuToken(null);
     setTokensSelecionados([]); // Limpa a seleção ao alternar
   };
 
@@ -164,8 +166,9 @@ export default function MesaRPG() {
         y: window.innerHeight / 2,
         cor: corSelecionada,
         imagem: imagemToken,
-        mone: nometoken,
+        nome: nometoken,
         vida: vidatoken,
+        vidamax: vidatoken, 
       });
     }
     setTokens([...tokens, ...novosTokens]);
@@ -213,7 +216,7 @@ export default function MesaRPG() {
 
   useEffect(() => {
     const tratarTeclas = (e) => {
-      if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (e.key === 'Delete' || e.key === 'Backspace'&& !escrevendo) {
         removerTokensSelecionados();
       }
     };
@@ -223,6 +226,7 @@ export default function MesaRPG() {
 
   // Movimentação Fluida (Solo e em Grupo) 🚚
   const handleDragStart = (e, idLider) => {
+    setMenuToken(null);
     const grupo = tokensSelecionados.includes(idLider)
       ? tokensSelecionados
       : [idLider];
@@ -628,8 +632,24 @@ export default function MesaRPG() {
         const fechar = () => setMenuToken(null);
         return (
           <div className="token-contextual" style={{ left: menuToken.x, top: menuToken.y }} onMouseDown={(e) => e.stopPropagation()}>
-            <strong>Token </strong>
-            <label className="token_contextual__vida">vida <input type="number" value={token.vida}onChange={(e) => atualizarToken({vida: e.target.value})} /></label>
+            <strong>Token {token.nome}</strong>
+            <label className="token-contextual__vida">
+                vida atual: {token.vida}/{token.vidamax}
+                <input
+                  type="number"
+                  onFocus={() => setEscrevendo(true)}
+                  onBlur={() => setEscrevendo(false)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const valorDigitado = Number(e.target.value);
+                      // Subtrai o valor digitado da vida atual do token
+                      atualizarToken({ vida: token.vida - valorDigitado });
+                      setEscrevendo(false);
+                      
+                    }
+                  }}
+                />
+              </label>
             <label className="token-contextual__cor">Cor <input type="color" value={token.cor || '#ff0044'} onChange={(e) => atualizarToken({ cor: e.target.value, imagem: null })} /></label>
             <button onClick={() => { atualizarToken({ escala: Math.min(4, (token.escala || 1) + 0.25) }); fechar(); }}>Aumentar tamanho</button>
             <button onClick={() => { atualizarToken({ escala: Math.max(0.25, (token.escala || 1) - 0.25) }); fechar(); }}>Diminuir tamanho</button>

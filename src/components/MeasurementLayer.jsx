@@ -1,12 +1,13 @@
-import { Layer, Line, Text } from 'react-konva';
+import { Layer, Arrow, Text } from 'react-konva';
 
 export default function MeasurementLayer({ inicio, atual, distancia }) {
   if (!inicio || !atual) return null;
   return (
     <Layer>
-      <Line
+      <Arrow
         points={[inicio.x, inicio.y, atual.x, atual.y]}
         stroke="#ffcc00"
+        fill="#ffcc00"
         strokeWidth={3}
         dash={[10, 5]}
       />
