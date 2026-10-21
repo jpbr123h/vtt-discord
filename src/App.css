@@ -13,71 +13,116 @@ html, body, #root {
 }
 .painel-tokens-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0, 0, 0, 0.5);
+  inset: 0;
+  padding: 20px;
+  background: rgba(5, 8, 13, 0.68);
+  backdrop-filter: blur(5px);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 1000;
+  animation: painel-tokens-aparecer 140ms ease-out;
 }
 
 .painel-tokens-modal {
-  background: #1e1e2e;
-  color: #cdd6f4;
-  border-radius: 12px;
-  width: 400px;
-  max-height: 80vh;
+  width: min(460px, 100%);
+  max-height: min(720px, 84vh);
   display: flex;
   flex-direction: column;
-  padding: 16px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.11);
+  border-radius: 18px;
+  background: #171c26;
+  color: #edf2fb;
+  box-shadow: 0 24px 70px rgba(0,0,0,.55);
+  animation: painel-tokens-subir 180ms ease-out;
 }
 
 .painel-tokens-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid #313244;
-  padding-bottom: 8px;
-  margin-bottom: 12px;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 22px 22px 18px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  background: linear-gradient(140deg, rgba(73,105,164,.2), transparent 70%);
 }
 
+.painel-tokens-titulo { min-width: 0; }
+.painel-tokens-sobretitulo { color: #8fa8d4; font-size: 9px; font-weight: 700; letter-spacing: .14em; }
+.painel-tokens-titulo h2 { display: flex; align-items: center; gap: 9px; margin-top: 6px; font-size: 20px; letter-spacing: -.03em; }
+.painel-tokens-titulo h2 span { display: inline-grid; min-width: 23px; height: 22px; padding: 0 6px; place-items: center; border: 1px solid rgba(132,163,220,.22); border-radius: 7px; background: rgba(102,137,201,.16); color: #b8cdf4; font-size: 11px; letter-spacing: 0; }
+.painel-tokens-titulo p { margin-top: 5px; color: #929eb1; font-size: 12px; }
+.painel-tokens-fechar { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border: 1px solid rgba(255,255,255,.09); border-radius: 10px; background: rgba(255,255,255,.04); color: #aeb9cb; cursor: pointer; transition: .15s ease; }
+.painel-tokens-fechar:hover { border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.09); color: white; }
 .painel-tokens-lista {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 9px;
+  min-height: 90px;
+  padding: 14px 18px;
+  scrollbar-color: #46536a transparent;
 }
 
 .token-card {
   display: flex;
   align-items: center;
-  gap: 12px;
-  background: #181825;
-  padding: 8px 12px;
-  border-radius: 8px;
+  gap: 11px;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid rgba(255,255,255,.065);
+  border-radius: 12px;
+  background: #1c222e;
+  transition: border-color 140ms ease, background 140ms ease;
 }
+.token-card:hover { border-color: rgba(145,169,211,.2); background: #202735; }
 
-.token-card__indicador {
-  width: 16px;
-  height: 16px;
+.token-card__avatar {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  overflow: hidden;
+  place-items: center;
   border-radius: 50%;
   flex-shrink: 0;
+  border: 2px solid rgba(255,255,255,.58);
+  color: white;
+  font-size: 15px;
+  font-weight: 700;
+  text-shadow: 0 1px 3px rgba(0,0,0,.7);
 }
+.token-card__avatar img { width: 100%; height: 100%; object-fit: cover; }
 
 .token-card__info {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
+  gap: 5px;
 }
+.token-card__info > strong { overflow: hidden; color: #e8edf6; font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.token-card__vida { display: flex; align-items: center; gap: 5px; color: #f1919b; font-size: 11px; font-weight: 700; }
+.token-card__vida small { color: #8996aa; font-size: 10px; font-weight: 500; }
+.token-card__barra { height: 4px; overflow: hidden; border-radius: 99px; background: #303847; }
+.token-card__barra span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #e36f7d, #f39a8e); transition: width 180ms ease; }
 
 .token-card__acoes {
   display: flex;
-  gap: 4px;
+  gap: 5px;
+  flex: 0 0 auto;
 }
+.token-card__acoes button { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; background: #272f3d; color: #d2dbea; cursor: pointer; transition: .14s ease; }
+.token-card__acoes button:hover { border-color: rgba(150,177,224,.35); background: #354257; color: white; }
+.token-card__acoes .token-card__deletar { margin-left: 3px; color: #e78b94; }
+.token-card__acoes .token-card__deletar:hover { border-color: rgba(231,139,148,.3); background: rgba(137,53,65,.3); color: #ffb0b6; }
+.tokens-vazio { display: grid; justify-items: center; gap: 8px; padding: 28px 14px; text-align: center; }
+.tokens-vazio__icone { display: grid; width: 42px; height: 42px; place-items: center; border: 1px solid rgba(241,145,155,.18); border-radius: 13px; background: rgba(241,145,155,.08); color: #e58c97; }
+.tokens-vazio strong { color: #dce4f1; font-size: 13px; }
+.tokens-vazio p { color: #8995a8; font-size: 11px; }
+.painel-tokens-rodape { padding: 11px 20px 14px; border-top: 1px solid rgba(255,255,255,.07); color: #78869a; font-size: 10px; text-align: center; }
+@keyframes painel-tokens-aparecer { from { opacity: 0; } to { opacity: 1; } }
+@keyframes painel-tokens-subir { from { opacity: 0; transform: translateY(8px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
 .mesa-toolbox {
   position: absolute;
   top: 20px;
@@ -116,6 +161,9 @@ html, body, #root {
 }
 
 .mesa-toolbar .mesa-toolbar__icone--perigo { color: #ff929b; }
+.mesa-toolbar .mesa-toolbar__manager { position: relative; margin-top: 9px; color: #aab9d2; }
+.mesa-toolbar .mesa-toolbar__manager::before { position: absolute; top: -9px; right: 4px; left: 4px; height: 1px; background: rgba(255,255,255,.12); content: ''; }
+.mesa-toolbar .mesa-toolbar__manager:hover { color: #fff; }
 
 .mesa-toolbar__arquivo {
   position: relative;
@@ -154,7 +202,7 @@ html, body, #root {
   font: 12px ui-sans-serif, system-ui, sans-serif;
 }
 .token-contextual > strong { padding: 4px 7px 7px; color: #9eacc2; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
-.token-contextual button, .token-contextual__cor, .token-contextual__vida {
+.token-contextual button, .token-contextual__cor, .token-contextual__vida, .token-contextual__nome {
   display: flex;
   width: 100%;
   min-height: 34px;
@@ -171,19 +219,34 @@ html, body, #root {
 }
 .token-contextual button:hover, .token-contextual__cor:hover { border-color: rgba(255,255,255,.08); background: #2b3443; }
 .token-contextual__cor input{ width: 28px; height: 24px; padding: 0; border: 0; background: transparent; cursor: pointer; }
-.token-contextual .token-contextual__excluir { color: #ff9da7; }
-.token-contextual__vida input{
-  width: 45px;
-  height: 24px;
-  padding: 0 3xp;
+.token-contextual__nome input {
+  width: 125px;
+  height: 26px;
+  padding: 0 7px;
   border: 1px solid #30394a;
   border-radius: 6px;
   outline: none;
   background: #10141c;
   color: white;
   font: inherit;
+}
+.token-contextual__nome input:focus { border-color: #53a9ff; }
+.token-contextual .token-contextual__excluir { color: #ff9da7; }
+.token-contextual__vida input{
+  width: 58px;
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid #30394a;
+  border-radius: 6px;
+  outline: none;
+  background: #10141c;
+  color: white;
+  font: inherit;
+  text-align: center;
   transition: border-color 150ms ease, box-shadow 150ms ease;
 }
+.token-contextual__vida input:focus { border-color: #668fff; box-shadow: 0 0 0 2px rgba(81,127,255,.16); }
+.token-contextual__vida-controle { display: flex; align-items: center; gap: 7px; color: #9ba8bc; font-variant-numeric: tabular-nums; }
 
 .canvas-texto-editor {
   position: fixed;
@@ -272,6 +335,13 @@ html, body, #root {
   .mesa-toolbar { gap: 5px; padding: 5px; }
   .mesa-toolbar .mesa-toolbar__icone { width: 38px; min-width: 38px; height: 38px; min-height: 38px; }
   .anotacao-painel { width: min(250px, calc(100vw - 76px)); padding: 13px; }
+  .painel-tokens-overlay { padding: 12px; }
+  .painel-tokens-header { padding: 18px 16px 15px; }
+  .painel-tokens-lista { padding: 12px; }
+  .token-card { gap: 8px; padding: 9px; }
+  .token-card__avatar { width: 34px; height: 34px; }
+  .token-card__acoes { gap: 3px; }
+  .token-card__acoes button { width: 27px; height: 28px; }
 }
 .mesa-toolbar button,
 .token-modal button {

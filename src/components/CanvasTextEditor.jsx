@@ -1,9 +1,9 @@
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 
 export default function CanvasTextEditor({ stageRef, editor, onChange, onCommit, onCancel }) {
   const inputRef = useRef(null);
   const finalizado = useRef(false);
-  const ajustarTamanho = () => {
+  const ajustarTamanho = useCallback(() => {
     const input = inputRef.current;
     if (!input) return;
     input.style.height = 'auto';
@@ -11,9 +11,9 @@ export default function CanvasTextEditor({ stageRef, editor, onChange, onCommit,
     const linhas = input.value.split('\n');
     const maiorLinha = Math.max(0, ...linhas.map((linha) => linha.length));
     input.style.width = `${editor.boxWidth || Math.min(420, Math.max(200, maiorLinha * (editor.fontSize || 20) * 0.62 + 32))}px`;
-  };
+  }, [editor.boxHeight, editor.boxWidth, editor.fontSize]);
 
-  useLayoutEffect(() => { ajustarTamanho(); }, [editor.texto, editor.boxWidth, editor.boxHeight, editor.fontSize]);
+  useLayoutEffect(() => { ajustarTamanho(); }, [ajustarTamanho]);
 
   useEffect(() => {
     const input = inputRef.current;

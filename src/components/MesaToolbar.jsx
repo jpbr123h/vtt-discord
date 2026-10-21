@@ -3,11 +3,11 @@ import { Map, Plus, Ruler, Trash2, Pencil, Type, MousePointer2, Eraser, X ,Setti
 export default function MesaToolbar({
   medindo, quantidadeSelecionada, onNovoToken, onCarregarMapa, onAlternarMedicao, onExcluirSelecionados,
   ferramenta = 'selecionar', onFerramentaChange, corAnotacao = '#ffcc00', onCorAnotacaoChange,
-  espessuraTraco = 4, onEspessuraTracoChange, textoAnotacao = '', onTextoAnotacaoChange,
+  espessuraTraco = 4, onEspessuraTracoChange,
   quantidadeAnotacoes = 0, onLimparAnotacoes, anotacaoSelecionada, onAnotacaoChange, onExcluirAnotacao, onDeselecionarAnotacao,
   fonteAnotacao = 'Arial, sans-serif', onFonteAnotacaoChange,
   tamanhoFonte = 20, onTamanhoFonteChange, espacoTexto = { boxWidth: 220, boxHeight: 72 }, onEspacoTextoChange,
-  quantidadeAnotacoesSelecionadas = 0, mostrarOpcoesAnotacao = false, onJanelaManager,
+  quantidadeAnotacoesSelecionadas = 0, mostrarOpcoesAnotacao = false, onJanelaManager, managerAberto = false,
 }) {
   const painelAberto = ferramenta === 'desenhar' || ferramenta === 'texto' ||
     (Boolean(anotacaoSelecionada) && mostrarOpcoesAnotacao && quantidadeAnotacoesSelecionadas === 1 && quantidadeSelecionada === 0);
@@ -40,7 +40,7 @@ export default function MesaToolbar({
         <button className={`mesa-toolbar__icone ${medindo ? 'mesa-toolbar__icone--ativa' : ''}`} onClick={onAlternarMedicao} title="Medir distância" aria-label="Medir distância" aria-pressed={medindo}>
           <Ruler size={18} />
         </button>
-        <button className="mesa-toolbat__icone mesa-toolbar__manger" title="manger" onClick={onJanelaManager}>
+        <button className="mesa-toolbar__icone mesa-toolbar__manager" title="Status dos tokens" aria-label="Abrir status dos tokens" aria-haspopup="dialog" aria-expanded={managerAberto} onClick={onJanelaManager}>
           <Settings size={18} />
         </button>
         {quantidadeSelecionada > 0 && (

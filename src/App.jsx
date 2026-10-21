@@ -3,6 +3,8 @@ import { Stage, Layer, Line, Text, Rect, Group } from 'react-konva';
 import MapaImagem from './components/MapaImagem';
 import MesaToolbar from './components/MesaToolbar';
 import TokenModal from './components/TokenModal';
+import NumericTextInput from './components/NumericTextInput';
+import { isTextEditingTarget } from './utils/keyboard';
 import TokenGroupControls from './components/TokenGroupControls';
 import TokenNode from './components/TokenNode';
 import GridLayer from './components/GridLayer';
@@ -34,7 +36,6 @@ export default function MesaRPG() {
   const [vidatoken, setVidaToken]=useState(0);
   const [nometoken, setNomeToken]=useState(null)
   const [urlMapa, setUrlMapa] = useState(null);
-  const [escrevendo, setEscrevendo] = useState(false);
   const [ferramenta, setFerramenta] = useState('selecionar');
   const [anotacoes, setAnotacoes] = useState([]);
   const [anotacaoSelecionada, setAnotacaoSelecionada] = useState(null);
@@ -43,7 +44,6 @@ export default function MesaRPG() {
   const [menuToken, setMenuToken] = useState(null);
   const [corAnotacao, setCorAnotacao] = useState('#ffcc00');
   const [espessuraTraco, setEspessuraTraco] = useState(5);
-  const [textoAnotacao, setTextoAnotacao] = useState('');
   const [fonteAnotacao, setFonteAnotacao] = useState('Arial, sans-serif');
   const [tamanhoFonte, setTamanhoFonte] = useState(20);
   const [espacoTexto, setEspacoTexto] = useState({ boxWidth: 220, boxHeight: 72 });
@@ -52,6 +52,11 @@ export default function MesaRPG() {
   const tracoAtual = useRef(null);
   const arrasteAnotacoes = useRef(null);
   const anotacoesNoArrasteToken = useRef(null);
+  const historicoRef = useRef([]);
+  const estadoHistoricoRef = useRef({ tokens, anotacoes, urlMapa });
+  const estadoPendenteRef = useRef(null);
+  const temporizadorHistoricoRef = useRef(null);
+  const desfazendoRef = useRef(false);
 
   // Estados de medição (Régua) 📏
   
@@ -64,6 +69,55 @@ export default function MesaRPG() {
     largura: window.innerWidth,
     altura: window.innerHeight,
   });
+
+  useEffect(() => {
+    const estadoAtual = { tokens, anotacoes, urlMapa };
+    if (desfazendoRef.current) {
+      desfazendoRef.current = false;
+      estadoHistoricoRef.current = estadoAtual;
+      return;
+    }
+
+    const anterior = estadoHistoricoRef.current;
+    if (anterior.tokens === tokens && anterior.anotacoes === anotacoes && anterior.urlMapa === urlMapa) return;
+
+    if (!estadoPendenteRef.current) estadoPendenteRef.current = anterior;
+    estadoHistoricoRef.current = estadoAtual;
+    window.clearTimeout(temporizadorHistoricoRef.current);
+    temporizadorHistoricoRef.current = window.setTimeout(() => {
+      historicoRef.current.push(estadoPendenteRef.current);
+      if (historicoRef.current.length > 50) historicoRef.current.shift();
+      estadoPendenteRef.current = null;
+    }, 300);
+
+    return () => window.clearTimeout(temporizadorHistoricoRef.current);
+  }, [tokens, anotacoes, urlMapa]);
+
+  useEffect(() => {
+    const desfazer = (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z' || e.shiftKey) return;
+      if (isTextEditingTarget(e.target)) return;
+
+      window.clearTimeout(temporizadorHistoricoRef.current);
+      if (estadoPendenteRef.current) {
+        historicoRef.current.push(estadoPendenteRef.current);
+        if (historicoRef.current.length > 50) historicoRef.current.shift();
+        estadoPendenteRef.current = null;
+      }
+      const anterior = historicoRef.current.pop();
+      if (!anterior) return;
+
+      e.preventDefault();
+      desfazendoRef.current = true;
+      estadoHistoricoRef.current = anterior;
+      setTokens(anterior.tokens);
+      setAnotacoes(anterior.anotacoes);
+      setUrlMapa(anterior.urlMapa);
+    };
+
+    window.addEventListener('keydown', desfazer);
+    return () => window.removeEventListener('keydown', desfazer);
+  }, []);
 
   // Alternar modo de medição 📏
   const alternarMedindo = () => {
@@ -161,7 +215,9 @@ export default function MesaRPG() {
 
   const criarNovoToken = () => {
     const novosTokens = [];
-    for (let i = 0; i < quantTokens; i++) {
+    const quantidade = Math.max(1, Number(quantTokens) || 1);
+    const vida = Number(vidatoken) || 0;
+    for (let i = 0; i < quantidade; i++) {
       novosTokens.push({
         id: `${Date.now()}-${i}`,
         x: window.innerWidth / 2 + i * 10,
@@ -169,11 +225,11 @@ export default function MesaRPG() {
         cor: corSelecionada,
         imagem: imagemToken,
         nome: nometoken,
-        vida: vidatoken,
-        vidamax: vidatoken, 
+        vida,
+        vidamax: vida,
       });
     }
-    setTokens([...tokens, ...novosTokens]);
+    setTokens((atuais) => [...atuais, ...novosTokens]);
     setJanelaToken(false);
   };
 
@@ -218,13 +274,18 @@ export default function MesaRPG() {
 
   useEffect(() => {
     const tratarTeclas = (e) => {
-      if (e.key === 'Delete' || e.key === 'Backspace'&& !escrevendo) {
-        removerTokensSelecionados();
-      }
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      if (isTextEditingTarget(e.target)) return;
+      if (janelaToken || janelaManager || menuToken || tokensSelecionados.length === 0) return;
+
+      e.preventDefault();
+      const idsSelecionados = new Set(tokensSelecionados);
+      setTokens((atuais) => atuais.filter((token) => !idsSelecionados.has(token.id)));
+      setTokensSelecionados([]);
     };
     window.addEventListener('keydown', tratarTeclas);
     return () => window.removeEventListener('keydown', tratarTeclas);
-  }, [tokensSelecionados]);
+  }, [tokensSelecionados, janelaToken, janelaManager, menuToken]);
 
   // Movimentação Fluida (Solo e em Grupo) 🚚
   const handleDragStart = (e, idLider) => {
@@ -556,7 +617,6 @@ export default function MesaRPG() {
         ferramenta={ferramenta}
         corAnotacao={corAnotacao}
         espessuraTraco={espessuraTraco}
-        textoAnotacao={textoAnotacao}
         quantidadeAnotacoes={anotacoes.length}
         quantidadeAnotacoesSelecionadas={anotacoesSelecionadas.length}
         mostrarOpcoesAnotacao={abrirPainelAnotacao}
@@ -597,7 +657,6 @@ export default function MesaRPG() {
         }}
         onCorAnotacaoChange={setCorAnotacao}
         onEspessuraTracoChange={setEspessuraTraco}
-        onTextoAnotacaoChange={setTextoAnotacao}
         onLimparAnotacoes={limparAnotacoes}
         quantidadeSelecionada={tokensSelecionados.length}
         onNovoToken={alternarToken}
@@ -608,6 +667,7 @@ export default function MesaRPG() {
         }}
         onExcluirSelecionados={removerTokensSelecionados}
         onJanelaManager={()=> setJanelaManager(!janelaManager)}
+        managerAberto={janelaManager}
       />
       {janelaManager &&(
         <PainelManager
@@ -643,23 +703,27 @@ export default function MesaRPG() {
         return (
           <div className="token-contextual" style={{ left: menuToken.x, top: menuToken.y }} onMouseDown={(e) => e.stopPropagation()}>
             <strong>Token {token.nome}</strong>
+            <label className="token-contextual__nome">
+              Nome
+              <input
+                type="text"
+                value={token.nome || ''}
+                onChange={(e) => atualizarToken({ nome: e.target.value })}
+                aria-label="Nome do token"
+              />
+            </label>
             <label className="token-contextual__vida">
-                vida atual: {token.vida}/{token.vidamax}
-                <input
-                  type="number"
-                  onFocus={() => setEscrevendo(true)}
-                  onBlur={() => setEscrevendo(false)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      const valorDigitado = Number(e.target.value);
-                      // Subtrai o valor digitado da vida atual do token
-                      atualizarToken({ vida: token.vida - valorDigitado });
-                      setEscrevendo(false);
-                      
-                    }
-                  }}
+              <span>Vida atual</span>
+              <div className="token-contextual__vida-controle">
+                <NumericTextInput
+                  value={token.vida ?? 0}
+                  min="0"
+                  aria-label="Vida atual do token"
+                  onChange={(vida) => atualizarToken({ vida: vida === '' ? 0 : vida })}
                 />
-              </label>
+                <span>/ {token.vidamax ?? token.vida ?? 0} PV</span>
+              </div>
+            </label>
             <label className="token-contextual__cor">Cor <input type="color" value={token.cor || '#ff0044'} onChange={(e) => atualizarToken({ cor: e.target.value, imagem: null })} /></label>
             <button onClick={() => { atualizarToken({ escala: Math.min(4, (token.escala || 1) + 0.25) }); fechar(); }}>Aumentar tamanho</button>
             <button onClick={() => { atualizarToken({ escala: Math.max(0.25, (token.escala || 1) - 0.25) }); fechar(); }}>Diminuir tamanho</button>

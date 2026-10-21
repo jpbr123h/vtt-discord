@@ -1,23 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { decompressFrame, parseGIF } from 'gifuct-js';
 
 export default function useAnimatedGif(dataUrl, enabled, nodeRef) {
-  const canvasRef = useRef(null);
-  const [pronto, setPronto] = useState(false);
-
-  if (!canvasRef.current && typeof document !== 'undefined') {
-    canvasRef.current = document.createElement('canvas');
-  }
+  const [animacao, setAnimacao] = useState({ canvas: null, dataUrl: null });
 
   useEffect(() => {
-    if (!enabled || !dataUrl || !canvasRef.current) return undefined;
+    if (!enabled || !dataUrl || typeof document === 'undefined') return undefined;
 
     let timer;
     let frameIndex = 0;
     let quadroAnterior = null;
     let canvasAnterior = null;
     let primeiroQuadro = true;
-    const canvas = canvasRef.current;
+    const canvas = document.createElement('canvas');
     const contexto = canvas.getContext('2d');
 
     try {
@@ -29,8 +24,6 @@ export default function useAnimatedGif(dataUrl, enabled, nodeRef) {
 
       canvas.width = gif.lsd.width;
       canvas.height = gif.lsd.height;
-      setPronto(false);
-
       const desenharProximoQuadro = () => {
         const quadro = decompressFrame(quadros[frameIndex], gif.gct, true);
 
@@ -62,7 +55,7 @@ export default function useAnimatedGif(dataUrl, enabled, nodeRef) {
 
         quadroAnterior = quadro;
         if (primeiroQuadro) {
-          setPronto(true);
+          setAnimacao({ canvas, dataUrl });
           primeiroQuadro = false;
         }
         nodeRef.current?.getLayer()?.batchDraw();
@@ -78,5 +71,6 @@ export default function useAnimatedGif(dataUrl, enabled, nodeRef) {
     return () => window.clearTimeout(timer);
   }, [dataUrl, enabled, nodeRef]);
 
-  return [canvasRef.current, pronto];
+  const pronto = enabled && animacao.dataUrl === dataUrl;
+  return [pronto ? animacao.canvas : null, pronto];
 }

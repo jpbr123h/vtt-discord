@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { Circle, Group, Image as KonvaImage } from 'react-konva';
+import { Circle, Group, Image as KonvaImage, Rect, Text } from 'react-konva';
 import useImage from 'use-image';
 import useAnimatedGif from '../hooks/useAnimatedGif';
 
@@ -10,6 +10,8 @@ export default function TokenNode({ token, raio, selecionado, medindo, ferrament
   const [canvasGif, gifPronto] = useAnimatedGif(token.imagem, gifAnimado, imagemGrupoRef);
   const imagemExibida = gifAnimado && gifPronto ? canvasGif : imagem;
   const raioAtual = raio * (token.escala || 1);
+  const escalaAtual = token.escala || 1;
+  const larguraNome = Math.min(140, Math.max(28, token.nome.length * 7 + 8)) * escalaAtual;
   const ladoCorte = imagemExibida ? Math.min(imagemExibida.width, imagemExibida.height) : 0;
   const cropX = imagemExibida ? (imagemExibida.width - ladoCorte) / 2 : 0;
   const cropY = imagemExibida ? (imagemExibida.height - ladoCorte) / 2 : 0;
@@ -56,6 +58,34 @@ export default function TokenNode({ token, raio, selecionado, medindo, ferrament
         onMouseEnter={(e) => { e.target.getStage().container().style.cursor = ferramenta === 'texto' ? 'text' : 'pointer'; }}
         onMouseLeave={(e) => { e.target.getStage().container().style.cursor = ferramenta === 'texto' ? 'text' : 'default'; }}
       />
+      {token.nome && (
+        <Group
+          x={token.x - larguraNome / 2}
+          y={token.y + raioAtual + 4}
+          listening={false}
+        >
+          <Rect
+            x={0}
+            y={0}
+            width={larguraNome}
+            height={18 * (token.escala || 1)}
+            fill="rgba(0, 0, 0, 0.5)"
+            cornerRadius={3 * (token.escala || 1)}
+          />
+          <Text
+            x={2 * escalaAtual}
+            y={1 * escalaAtual}
+            width={larguraNome - 4 * escalaAtual}
+            height={16 * escalaAtual}
+            text={token.nome}
+            align="center"
+            verticalAlign="middle"
+            fontSize={12 * escalaAtual}
+            fontStyle="bold"
+            fill="#ffffff"
+          />
+        </Group>
+      )}
     </>
   );
 }

@@ -1,4 +1,5 @@
 import { ImagePlus, Plus, UserRoundPlus, X } from 'lucide-react';
+import NumericTextInput from './NumericTextInput';
 
 export default function TokenModal({
   quantidade,
@@ -32,20 +33,19 @@ export default function TokenModal({
         <div className="token-modal__conteudo">
           <div className="token-modal__campo">
             <label htmlFor="token-nome">Nome</label>
-            <input type="text" id="token-name" value={(nome)} onChange={(e) => onNomeChange(e.target.value)}/>
+            <input type="text" id="token-nome" value={nome || ''} onChange={(e) => onNomeChange(e.target.value)}/>
           </div>
           <div className='token-modal__campo'>
             <label htmlFor="token-vida">Vida</label>
-            <input type="number" id='token-vida' value={vida} onChange={(e) => onVidaChange(Number(e.target.value))}/>
+            <NumericTextInput id="token-vida" value={vida} onChange={onVidaChange} />
           </div>
           <div className="token-modal__campo">
             <label htmlFor="token-quantidade">Quantidade</label>
-            <input
+            <NumericTextInput
               id="token-quantidade"
-              type="number"
               min="1"
               value={quantidade}
-              onChange={(e) => onQuantidadeChange(Number(e.target.value))}
+              onChange={onQuantidadeChange}
             />
             <small>Crie vários tokens com a mesma aparência.</small>
           </div>
