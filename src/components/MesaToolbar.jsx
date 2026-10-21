@@ -1,4 +1,4 @@
-import { Map, Plus, Ruler, Trash2, Pencil, Type, MousePointer2, Eraser, X ,Settings,} from 'lucide-react';
+import { Map, Plus, Ruler, Trash2, Pencil, Type, MousePointer2, Eraser, X ,Settings} from 'lucide-react';
 
 export default function MesaToolbar({
   medindo, quantidadeSelecionada, onNovoToken, onCarregarMapa, onAlternarMedicao, onExcluirSelecionados,

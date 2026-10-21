@@ -11,7 +11,6 @@ html, body, #root {
   background-color: #1a1a1a;
   text-align: left;
 }
-
 .painel-tokens-overlay {
   position: fixed;
   top: 0;
