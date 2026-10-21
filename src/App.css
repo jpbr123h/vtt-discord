@@ -11,6 +11,74 @@ html, body, #root {
   background-color: #1a1a1a;
   text-align: left;
 }
+
+.painel-tokens-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.painel-tokens-modal {
+  background: #1e1e2e;
+  color: #cdd6f4;
+  border-radius: 12px;
+  width: 400px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.painel-tokens-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #313244;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+}
+
+.painel-tokens-lista {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.token-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #181825;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+.token-card__indicador {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.token-card__info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.token-card__acoes {
+  display: flex;
+  gap: 4px;
+}
 .mesa-toolbox {
   position: absolute;
   top: 20px;

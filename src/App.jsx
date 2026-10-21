@@ -9,6 +9,7 @@ import GridLayer from './components/GridLayer';
 import MeasurementLayer from './components/MeasurementLayer';
 import SelectionRectangle from './components/SelectionRectangle';
 import CanvasTextEditor from './components/CanvasTextEditor';
+import PainelManager from './components/manager';
 import './App.css';
 
 const TAMANHO_GRID = 50;
@@ -25,6 +26,7 @@ export default function MesaRPG() {
   const selecaoAreaConcluida = useRef(false);
   const posicoesGrupoMoldura = useRef(null);
   const redimensionamentoGrupo = useRef(null);
+  const [janelamanager, setJanelaManager]=useState(false);
   const [janelaToken, setJanelaToken] = useState(false);
   const [corSelecionada, setCorSelecionada] = useState('#ff0044');
   const [imagemToken, setImagemToken] = useState(null);
@@ -64,6 +66,7 @@ export default function MesaRPG() {
   });
 
   // Alternar modo de medição 📏
+
   const alternarMedindo = () => {
     setMedindo(!medindo);
     setPontoInicial(null);
@@ -599,6 +602,7 @@ export default function MesaRPG() {
         onLimparAnotacoes={limparAnotacoes}
         quantidadeSelecionada={tokensSelecionados.length}
         onNovoToken={alternarToken}
+        onJanelaManager={() => setJanelaManager(!janelamanager)}
         onCarregarMapa={handleCarregarMapa}
         onAlternarMedicao={() => {
           setFerramenta('selecionar');
@@ -606,7 +610,14 @@ export default function MesaRPG() {
         }}
         onExcluirSelecionados={removerTokensSelecionados}
       />
-
+      {janelamanager &&(
+        <PainelManager
+          isOpen={janelamanager}
+          onClose={()=>setJanelaManager(false)}
+          tokens={tokens}
+          setTokens={setTokens}
+        />
+      )}
       {janelaToken && (
         <TokenModal
           quantidade={quantTokens}
