@@ -1,11 +1,13 @@
-import { useRef } from 'react';
+import { forwardRef, useImperativeHandle, useRef } from 'react';
 import { Circle, Group, Image as KonvaImage, Rect, Text } from 'react-konva';
 import useImage from 'use-image';
 import useAnimatedGif from '../hooks/useAnimatedGif';
 
-export default function TokenNode({ token, raio, selecionado, medindo, ferramenta = 'selecionar', onSelecionar, onDuploClique, onArrasteInicio, onArraste, onArrasteFim, onMenuContexto }) {
+const TokenNode = forwardRef(function TokenNode({ token, raio, selecionado, medindo, ferramenta = 'selecionar', onSelecionar, onDuploClique, onArrasteInicio, onArraste, onArrasteFim, onMenuContexto }, ref) {
   const [imagem] = useImage(token.imagem || '');
   const imagemGrupoRef = useRef(null);
+  const circuloRef = useRef(null);
+  const nomeGrupoRef = useRef(null);
   const gifAnimado = token.imagem?.startsWith('data:image/gif');
   const [canvasGif, gifPronto] = useAnimatedGif(token.imagem, gifAnimado, imagemGrupoRef);
   const imagemExibida = gifAnimado && gifPronto ? canvasGif : imagem;
@@ -15,6 +17,21 @@ export default function TokenNode({ token, raio, selecionado, medindo, ferrament
   const ladoCorte = imagemExibida ? Math.min(imagemExibida.width, imagemExibida.height) : 0;
   const cropX = imagemExibida ? (imagemExibida.width - ladoCorte) / 2 : 0;
   const cropY = imagemExibida ? (imagemExibida.height - ladoCorte) / 2 : 0;
+
+  useImperativeHandle(ref, () => ({
+    moverPara(x, y) {
+      circuloRef.current?.position({ x, y });
+      imagemGrupoRef.current?.position({ x, y });
+      nomeGrupoRef.current?.position({ x: x - larguraNome / 2, y: y + raioAtual + 4 });
+    },
+  }), [larguraNome, raioAtual]);
+
+  const sincronizarVisuais = (e) => {
+    const { x, y } = e.target.position();
+    imagemGrupoRef.current?.position({ x, y });
+    nomeGrupoRef.current?.position({ x: x - larguraNome / 2, y: y + raioAtual + 4 });
+    onArraste(e, token.id);
+  };
 
   return (
     <>
@@ -41,6 +58,7 @@ export default function TokenNode({ token, raio, selecionado, medindo, ferrament
         </Group>
       )}
       <Circle
+        ref={circuloRef}
         x={token.x}
         y={token.y}
         radius={raioAtual}
@@ -53,13 +71,14 @@ export default function TokenNode({ token, raio, selecionado, medindo, ferrament
         onContextMenu={(e) => { e.evt.preventDefault(); e.cancelBubble = true; onMenuContexto?.(e, token.id); }}
         onDblClick={(e) => onDuploClique(e, token.id)}
         onDragStart={(e) => onArrasteInicio(e, token.id)}
-        onDragMove={(e) => onArraste(e, token.id)}
+        onDragMove={sincronizarVisuais}
         onDragEnd={(e) => onArrasteFim(e, token.id)}
         onMouseEnter={(e) => { e.target.getStage().container().style.cursor = ferramenta === 'texto' ? 'text' : 'pointer'; }}
         onMouseLeave={(e) => { e.target.getStage().container().style.cursor = ferramenta === 'texto' ? 'text' : 'default'; }}
       />
       {token.nome && (
         <Group
+          ref={nomeGrupoRef}
           x={token.x - larguraNome / 2}
           y={token.y + raioAtual + 4}
           listening={false}
@@ -88,4 +107,6 @@ export default function TokenNode({ token, raio, selecionado, medindo, ferrament
       )}
     </>
   );
-}
+});
+
+export default TokenNode;

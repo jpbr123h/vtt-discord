@@ -1,0 +1,23 @@
+.auth-page{width:100%;min-height:100%;height:100%;overflow:auto;background:#0a0e1a;color:#eaeaea;font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif}
+.auth-simple-header{width:min(100% - 48px,980px);height:72px;margin:auto;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #2a2a4a}
+.auth-brand{display:flex;align-items:center;gap:9px;color:#eaeaea;text-decoration:none;font-size:15px;font-weight:700;letter-spacing:.04em}
+.auth-mark{display:grid;width:29px;height:29px;place-items:center;border:1px solid #2b4d79;border-radius:6px;color:#75a9ef}
+.auth-simple-switch{display:flex;gap:6px;color:#a4b0c7;font-size:11px}
+.auth-simple-switch a{color:#75a9ef;font-weight:700;text-decoration:none}
+.auth-simple-switch a:hover{text-decoration:underline}
+.auth-panel{min-height:calc(100% - 72px);display:flex;flex-direction:column;padding:24px}
+.auth-form-wrap{display:grid;flex:1;place-items:center}
+.auth-card{width:min(100%,370px);gap:0;padding:28px;border:1px solid #30415e;border-radius:8px;background:#141d30;box-shadow:0 16px 42px rgba(0,0,0,.28)}
+.auth-card-header{gap:0;padding:0 0 23px}
+.auth-card-title{color:#eaeaea;font-family:"Alegreya",Georgia,serif;font-size:27px;font-weight:600;letter-spacing:-.025em}
+.auth-card-description{margin-top:6px;color:#a4b0c7;font-size:12px;line-height:1.6}
+.auth-card-content{padding:0}
+.auth-notice{margin-bottom:17px;padding:11px 12px;border:1px solid #30415e;border-radius:5px;background:#1a2740;color:#a4b0c7;font-size:11px;line-height:1.6}.auth-notice code{color:#eaeaea;font-size:10px}
+.auth-form{display:grid;gap:17px}.auth-form-field{display:grid;gap:7px}.auth-password-label{display:flex;align-items:center;justify-content:space-between}
+.auth-label{color:#eaeaea;font-size:11px;font-weight:650}.auth-password-hint{color:#a4b0c7;font-size:10px}
+.auth-input{height:42px;padding:0 15px;border-color:#30415e;border-radius:5px;background:#0f1626;color:#eaeaea;font-size:12px;box-shadow:none}.auth-input::placeholder{color:#71809a}.auth-input:focus-visible{border-color:#4299e1;box-shadow:0 0 0 2px rgba(66,153,225,.17)}
+.auth-submit-button{width:100%;height:42px;justify-content:center;margin-top:2px;padding:0 14px;border-color:#2b6cb0;border-radius:5px;background:#2b6cb0;color:#fff;font-size:12px;font-weight:650}.auth-submit-button:hover:not(:disabled){background:#4299e1;border-color:#4299e1}.auth-submit-button:disabled{opacity:.48}
+.auth-error{margin-top:-7px;color:#ff929b;font-size:11px}
+.auth-card-footer{justify-content:flex-start;margin-top:18px;padding:13px 0 0;border-top:1px solid #2a2a4a;color:#a4b0c7;font-size:10px}
+.auth-loading{height:100%;display:grid;place-items:center;background:#0a0e1a;color:#eaeaea;font:13px "IBM Plex Sans",sans-serif}
+@media(max-width:520px){.auth-simple-header{width:calc(100% - 32px);height:62px}.auth-panel{min-height:calc(100% - 62px);padding:18px 16px}.auth-card{padding:24px}.auth-simple-switch{font-size:10px}}

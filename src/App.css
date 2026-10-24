@@ -165,6 +165,51 @@ html, body, #root {
 .mesa-toolbar .mesa-toolbar__manager::before { position: absolute; top: -9px; right: 4px; left: 4px; height: 1px; background: rgba(255,255,255,.12); content: ''; }
 .mesa-toolbar .mesa-toolbar__manager:hover { color: #fff; }
 
+.mesa-draw-tabs {
+  position: fixed;
+  z-index: 12;
+  top: 20px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  max-width: calc(100vw - 180px);
+  gap: 4px;
+  padding: 5px;
+  overflow-x: auto;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 13px;
+  background: rgba(20,25,35,.95);
+  box-shadow: 0 12px 32px rgba(0,0,0,.38);
+  backdrop-filter: blur(12px);
+  transform: translateX(-50%);
+  scrollbar-width: none;
+}
+.mesa-draw-tabs::-webkit-scrollbar { display: none; }
+.mesa-draw-tabs .mesa-draw-tabs__opcao {
+  display: flex;
+  width: 72px;
+  min-width: 72px;
+  height: 48px;
+  min-height: 48px;
+  padding: 4px 6px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border-color: transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #aeb9ca;
+  font-size: 9px;
+  box-shadow: none;
+  line-height: 1;
+}
+.mesa-draw-tabs__opcao svg { display: block; flex: 0 0 auto; }
+.mesa-draw-tabs__opcao span { display: block; width: 100%; overflow: hidden; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.mesa-draw-tabs .mesa-draw-tabs__opcao:hover { border-color: rgba(255,255,255,.08); background: #252e3d; color: #f4f6fa; transform: none; }
+.mesa-draw-tabs .mesa-draw-tabs__opcao--ativa,
+.mesa-draw-tabs .mesa-draw-tabs__opcao--ativa:hover { border-color: rgba(108,155,255,.5); background: #293b5c; color: #fff; }
+
 .mesa-toolbar__arquivo {
   position: relative;
   display: grid;
@@ -334,6 +379,8 @@ html, body, #root {
   .mesa-toolbox { top: 10px; left: 10px; gap: 8px; }
   .mesa-toolbar { gap: 5px; padding: 5px; }
   .mesa-toolbar .mesa-toolbar__icone { width: 38px; min-width: 38px; height: 38px; min-height: 38px; }
+  .mesa-draw-tabs { top: 10px; left: auto; right: 10px; max-width: calc(100vw - 70px); transform: none; }
+  .mesa-draw-tabs .mesa-draw-tabs__opcao { width: 58px; min-width: 58px; height: 44px; min-height: 44px; padding: 3px 4px; }
   .anotacao-painel { width: min(250px, calc(100vw - 76px)); padding: 13px; }
   .painel-tokens-overlay { padding: 12px; }
   .painel-tokens-header { padding: 18px 16px 15px; }

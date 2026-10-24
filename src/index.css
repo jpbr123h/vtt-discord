@@ -1,3 +1,50 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+:root {
+  --background: #111318;
+  --foreground: #f0eee9;
+  --card: #191b21;
+  --card-foreground: #f0eee9;
+  --popover: #191b21;
+  --popover-foreground: #f0eee9;
+  --primary: #c7a66b;
+  --primary-foreground: #17140f;
+  --secondary: #282a30;
+  --secondary-foreground: #f0eee9;
+  --muted: #26282e;
+  --muted-foreground: #9c9ba0;
+  --accent: #2b2d33;
+  --accent-foreground: #f0eee9;
+  --destructive: #d36d69;
+  --border: #34363d;
+  --input: #34363d;
+  --ring: #c7a66b;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -8,7 +55,8 @@ html, body {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background-color: #1a1a1a;
+  background-color: #111318;
+  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 #root {

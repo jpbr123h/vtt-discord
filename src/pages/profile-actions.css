@@ -1,0 +1,4 @@
+.profile-actions{display:flex;align-items:center;justify-content:flex-end;gap:14px;margin-top:16px}
+.profile-error{color:#ff929b;font-size:11px}
+.profile-logout{height:36px;border-color:#67313e;background:#201b27;color:#f0b0b8;font-size:11px}
+.profile-logout:hover:not(:disabled){border-color:#a74253;background:#30202b;color:#ffd1d5}

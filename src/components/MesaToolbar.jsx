@@ -1,13 +1,14 @@
-import { Map, Plus, Ruler, Trash2, Pencil, Type, MousePointer2, Eraser, X ,Settings} from 'lucide-react';
+import { Map, Plus, Ruler, Trash2, Pencil, Type, MousePointer2, Eraser, X, Settings, Minus, Circle, Square, RectangleHorizontal, Triangle, Star, UserRound } from 'lucide-react';
 
 export default function MesaToolbar({
   medindo, quantidadeSelecionada, onNovoToken, onCarregarMapa, onAlternarMedicao, onExcluirSelecionados,
   ferramenta = 'selecionar', onFerramentaChange, corAnotacao = '#ffcc00', onCorAnotacaoChange,
+  formaDesenho = 'livre', onFormaDesenhoChange,
   espessuraTraco = 4, onEspessuraTracoChange,
   quantidadeAnotacoes = 0, onLimparAnotacoes, anotacaoSelecionada, onAnotacaoChange, onExcluirAnotacao, onDeselecionarAnotacao,
   fonteAnotacao = 'Arial, sans-serif', onFonteAnotacaoChange,
   tamanhoFonte = 20, onTamanhoFonteChange, espacoTexto = { boxWidth: 220, boxHeight: 72 }, onEspacoTextoChange,
-  quantidadeAnotacoesSelecionadas = 0, mostrarOpcoesAnotacao = false, onJanelaManager, managerAberto = false,
+  quantidadeAnotacoesSelecionadas = 0, mostrarOpcoesAnotacao = false, onJanelaManager, managerAberto = false, onPerfil,
 }) {
   const painelAberto = ferramenta === 'desenhar' || ferramenta === 'texto' ||
     (Boolean(anotacaoSelecionada) && mostrarOpcoesAnotacao && quantidadeAnotacoesSelecionadas === 1 && quantidadeSelecionada === 0);
@@ -20,6 +21,15 @@ export default function MesaToolbar({
     { nome: 'Média', valor: 5 },
     { nome: 'Grossa', valor: 10 },
   ];
+  const opcoesForma = [
+    { id: 'livre', nome: 'Livre', Icone: Pencil },
+    { id: 'linha', nome: 'Linha', Icone: Minus },
+    { id: 'circulo', nome: 'Círculo', Icone: Circle },
+    { id: 'quadrado', nome: 'Quadrado', Icone: Square },
+    { id: 'retangulo', nome: 'Retângulo', Icone: RectangleHorizontal },
+    { id: 'triangulo', nome: 'Triângulo', Icone: Triangle },
+    { id: 'estrela', nome: 'Estrela', Icone: Star },
+  ];
 
   return (
     <div className="mesa-toolbox">
@@ -28,7 +38,7 @@ export default function MesaToolbar({
         <button className="mesa-toolbar__icone" onClick={() => onFerramentaChange?.('selecionar')} title="Selecionar" aria-label="Selecionar" aria-pressed={ferramenta === 'selecionar'}>
           <MousePointer2 size={18} />
         </button>
-        <button className="mesa-toolbar__icone" onClick={() => onFerramentaChange?.('desenhar')} title="Desenhar" aria-label="Desenhar" aria-pressed={ferramenta === 'desenhar'}>
+        <button className="mesa-toolbar__icone" onClick={() => onFerramentaChange?.('desenhar')} title="Draw" aria-label="Draw" aria-pressed={ferramenta === 'desenhar'}>
           <Pencil size={18} />
         </button>
         <button className="mesa-toolbar__icone" onClick={() => onFerramentaChange?.('texto')} title="Adicionar texto" aria-label="Adicionar texto" aria-pressed={ferramenta === 'texto'}>
@@ -43,17 +53,31 @@ export default function MesaToolbar({
         <button className="mesa-toolbar__icone mesa-toolbar__manager" title="Status dos tokens" aria-label="Abrir status dos tokens" aria-haspopup="dialog" aria-expanded={managerAberto} onClick={onJanelaManager}>
           <Settings size={18} />
         </button>
+        <button className="mesa-toolbar__icone mesa-toolbar__perfil" title="Meu perfil" aria-label="Ver meu perfil" onClick={onPerfil}>
+          <UserRound size={18} />
+        </button>
         {quantidadeSelecionada > 0 && (
           <button className="mesa-toolbar__icone mesa-toolbar__icone--perigo" onClick={onExcluirSelecionados} title={`Excluir ${quantidadeSelecionada} token(s)`} aria-label="Excluir tokens selecionados"><Trash2 size={18} /></button>
         )}
       </div>
 
+      {ferramenta === 'desenhar' && (
+        <div className="mesa-draw-tabs" role="toolbar" aria-label="Formato do desenho">
+          {opcoesForma.map(({ id, nome, Icone }) => (
+            <button key={id} type="button" className={formaDesenho === id ? 'mesa-draw-tabs__opcao mesa-draw-tabs__opcao--ativa' : 'mesa-draw-tabs__opcao'}
+              title={nome} aria-label={nome} aria-pressed={formaDesenho === id} onClick={() => onFormaDesenhoChange?.(id)}>
+              <Icone size={17} /><span>{nome}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {painelAberto && (
-        <section className="anotacao-painel" aria-label="Opções da anotação">
+        <section className="anotacao-painel" aria-label="Opções de Draw">
           <header className="anotacao-painel__cabecalho">
             <div>
-              <strong>{anotacaoSelecionada ? (anotacaoSelecionada.tipo === 'texto' ? 'Editar texto' : 'Editar desenho') : ferramenta === 'texto' ? 'Adicionar texto' : 'Desenhar'}</strong>
-              <span>{anotacaoSelecionada ? 'Personalize o item selecionado' : ferramenta === 'texto' ? 'Digite e clique no mapa' : 'Escolha a cor e o traço'}</span>
+              <strong>{anotacaoSelecionada ? (anotacaoSelecionada.tipo === 'texto' ? 'Editar texto' : 'Editar desenho') : ferramenta === 'texto' ? 'Adicionar texto' : 'Draw'}</strong>
+              <span>{anotacaoSelecionada ? 'Personalize o item selecionado' : ferramenta === 'texto' ? 'Digite e clique no mapa' : 'Escolha o formato e arraste no mapa'}</span>
             </div>
             {anotacaoSelecionada && <button className="anotacao-painel__fechar" onClick={onDeselecionarAnotacao} title="Fechar opções"><X size={16} /></button>}
           </header>
@@ -124,7 +148,7 @@ export default function MesaToolbar({
               onChange={(e) => anotacaoSelecionada ? alterarAnotacao({ cor: e.target.value }) : onCorAnotacaoChange?.(e.target.value)} />
           </label>
 
-          {((anotacaoSelecionada?.tipo === 'traco') || (!anotacaoSelecionada && ferramenta === 'desenhar')) && (
+          {((['traco', 'forma'].includes(anotacaoSelecionada?.tipo)) || (!anotacaoSelecionada && ferramenta === 'desenhar')) && (
             <div className="anotacao-painel__campo">
               <span>Espessura</span>
               <div className="anotacao-painel__espessuras" role="group" aria-label="Espessura do traço">
@@ -143,7 +167,7 @@ export default function MesaToolbar({
           {anotacaoSelecionada ? (
             <button className="anotacao-painel__apagar" onClick={onExcluirAnotacao}><Trash2 size={16} /> Apagar item</button>
           ) : quantidadeAnotacoes > 0 && (
-            <button className="anotacao-painel__limpar" onClick={onLimparAnotacoes}><Eraser size={16} /> Limpar todas as anotações</button>
+            <button className="anotacao-painel__limpar" onClick={onLimparAnotacoes}><Eraser size={16} /> Limpar desenhos e textos</button>
           )}
         </section>
       )}
