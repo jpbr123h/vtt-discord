@@ -11,9 +11,10 @@ const TokenNode = forwardRef(function TokenNode({ token, raio, selecionado, medi
   const gifAnimado = token.imagem?.startsWith('data:image/gif');
   const [canvasGif, gifPronto] = useAnimatedGif(token.imagem, gifAnimado, imagemGrupoRef);
   const imagemExibida = gifAnimado && gifPronto ? canvasGif : imagem;
+  const nomeToken = token.nome || '';
   const raioAtual = raio * (token.escala || 1);
   const escalaAtual = token.escala || 1;
-  const larguraNome = Math.min(140, Math.max(28, token.nome.length * 7 + 8)) * escalaAtual;
+  const larguraNome = Math.min(140, Math.max(28, nomeToken.length * 7 + 8)) * escalaAtual;
   const ladoCorte = imagemExibida ? Math.min(imagemExibida.width, imagemExibida.height) : 0;
   const cropX = imagemExibida ? (imagemExibida.width - ladoCorte) / 2 : 0;
   const cropY = imagemExibida ? (imagemExibida.height - ladoCorte) / 2 : 0;
@@ -76,7 +77,7 @@ const TokenNode = forwardRef(function TokenNode({ token, raio, selecionado, medi
         onMouseEnter={(e) => { e.target.getStage().container().style.cursor = ferramenta === 'texto' ? 'text' : 'pointer'; }}
         onMouseLeave={(e) => { e.target.getStage().container().style.cursor = ferramenta === 'texto' ? 'text' : 'default'; }}
       />
-      {token.nome && (
+      {nomeToken && (
         <Group
           ref={nomeGrupoRef}
           x={token.x - larguraNome / 2}
@@ -96,7 +97,7 @@ const TokenNode = forwardRef(function TokenNode({ token, raio, selecionado, medi
             y={1 * escalaAtual}
             width={larguraNome - 4 * escalaAtual}
             height={16 * escalaAtual}
-            text={token.nome}
+            text={nomeToken}
             align="center"
             verticalAlign="middle"
             fontSize={12 * escalaAtual}

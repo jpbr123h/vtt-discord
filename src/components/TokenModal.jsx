@@ -33,7 +33,7 @@ export default function TokenModal({
         <div className="token-modal__conteudo">
           <div className="token-modal__campo">
             <label htmlFor="token-nome">Nome</label>
-            <input type="text" id="token-nome" value={nome || ''} onChange={(e) => onNomeChange(e.target.value)}/>
+            <input type="text" id="token-nome" value={nome || ''} placeholder="Ex.: Goblin" onChange={(e) => onNomeChange(e.target.value)}/>
           </div>
           <div className='token-modal__campo'>
             <label htmlFor="token-vida">Vida</label>
