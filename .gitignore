@@ -13,6 +13,10 @@ dist-ssr
 *.local
 .env
 
+# Imagens enviadas em runtime (servidas de public/uploads)
+public/uploads/*
+!public/uploads/.gitkeep
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
