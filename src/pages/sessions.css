@@ -1,0 +1,252 @@
+.sessions-page {
+  min-height: 100vh;
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: radial-gradient(circle at top, rgba(59, 130, 246, 0.12), transparent 55%), #0b1020;
+  color: #f7f9ff;
+}
+
+.sessions-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 32px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(11, 16, 32, 0.9);
+  backdrop-filter: blur(12px);
+}
+
+.sessions-back,
+.sessions-profile {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(226, 232, 255, 0.8);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.sessions-back:hover,
+.sessions-profile:hover {
+  color: #fff;
+}
+
+.sessions-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.sessions-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(96, 165, 250, 0.9), rgba(59, 130, 246, 0.6));
+  box-shadow: 0 18px 40px -20px rgba(59, 130, 246, 0.9);
+}
+
+.sessions-content {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  padding: 40px 24px 64px;
+}
+
+.sessions-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sessions-heading p {
+  margin: 0;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  font-size: 12px;
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.sessions-heading h1 {
+  margin: 0;
+  font-size: clamp(28px, 4vw, 48px);
+  font-weight: 600;
+}
+
+.sessions-heading span {
+  color: rgba(203, 213, 225, 0.8);
+}
+
+.sessions-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.sessions-card {
+  grid-column: 1 / span 5;
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.9) 100%);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  backdrop-filter: blur(16px);
+}
+
+.sessions-card--list {
+  grid-column: 6 / span 7;
+}
+
+.sessions-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sessions-card-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+}
+
+.sessions-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sessions-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sessions-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sessions-error {
+  color: #f87171;
+  margin: 0;
+}
+
+.sessions-success {
+  color: #34d399;
+  margin: 0;
+}
+
+.sessions-warning {
+  color: rgba(250, 204, 21, 0.9);
+  margin: 0;
+  font-size: 13px;
+}
+
+.sessions-loading,
+.sessions-empty {
+  color: rgba(203, 213, 225, 0.8);
+}
+
+.sessions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.session-item {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.7);
+}
+
+.session-item__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.session-item__header h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.session-item__header p {
+  margin: 4px 0 0;
+  color: rgba(203, 213, 225, 0.8);
+}
+
+.session-item__badge {
+  display: inline-flex;
+  margin-top: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+
+.session-item__badge--mestre {
+  background: rgba(59, 130, 246, 0.25);
+  color: #bfdbfe;
+}
+
+.session-item__badge--jogador {
+  background: rgba(16, 185, 129, 0.25);
+  color: #a7f3d0;
+}
+
+.session-item__invite {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.session-item__invite-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.session-item__invite-row input {
+  flex: 1 1 240px;
+}
+
+.session-item__invite small {
+  color: rgba(148, 163, 184, 0.9);
+}
+
+@media (max-width: 1080px) {
+  .sessions-card,
+  .sessions-card--list {
+    grid-column: 1 / span 12;
+  }
+}
+
+@media (max-width: 720px) {
+  .sessions-topbar {
+    padding: 14px 18px;
+  }
+  .sessions-content {
+    padding: 28px 18px 48px;
+  }
+  .session-item__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

@@ -1,15 +1,11 @@
 import { Heart, Minus, Plus, Trash2, X } from 'lucide-react';
 
-export default function PainelManager({ isOpen, onClose, tokens, setTokens }) {
+export default function PainelManager({ isOpen, onClose, tokens, onAlterarVida, onExcluirToken }) {
   if (!isOpen) return null;
 
-  const alterarVida = (id, delta) => {
-    setTokens((atuais) => atuais.map((token) => (
-      token.id === id ? { ...token, vida: Math.max(0, Number(token.vida || 0) + delta) } : token
-    )));
-  };
+  const alterarVida = (id, delta) => onAlterarVida?.(id, delta);
 
-  const deletarToken = (id) => setTokens((atuais) => atuais.filter((token) => token.id !== id));
+  const deletarToken = (id) => onExcluirToken?.(id);
 
   return (
     <div className="painel-tokens-overlay" onClick={onClose} onMouseDown={(e) => e.stopPropagation()}>

@@ -1,5 +1,7 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import { isFirebaseConfigComplete } from './authUtils.js';
 
 const config = {
@@ -14,3 +16,5 @@ const config = {
 export const firebaseConfigured = isFirebaseConfigComplete(config);
 const app = firebaseConfigured ? (getApps()[0] || initializeApp(config)) : null;
 export const auth = app ? getAuth(app) : null;
+export const db = app ? getFirestore(app) : null;
+export const storage = app ? getStorage(app) : null;

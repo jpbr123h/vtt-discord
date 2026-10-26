@@ -29,6 +29,7 @@ export default function MesaToolbar({
     { id: 'retangulo', nome: 'Retângulo', Icone: RectangleHorizontal },
     { id: 'triangulo', nome: 'Triângulo', Icone: Triangle },
     { id: 'estrela', nome: 'Estrela', Icone: Star },
+    { id: 'borracha', nome: 'Borracha', Icone: Eraser },
   ];
 
   return (
@@ -77,7 +78,7 @@ export default function MesaToolbar({
           <header className="anotacao-painel__cabecalho">
             <div>
               <strong>{anotacaoSelecionada ? (anotacaoSelecionada.tipo === 'texto' ? 'Editar texto' : 'Editar desenho') : ferramenta === 'texto' ? 'Adicionar texto' : 'Draw'}</strong>
-              <span>{anotacaoSelecionada ? 'Personalize o item selecionado' : ferramenta === 'texto' ? 'Digite e clique no mapa' : 'Escolha o formato e arraste no mapa'}</span>
+              <span>{anotacaoSelecionada ? 'Personalize o item selecionado' : ferramenta === 'texto' ? 'Digite e clique no mapa' : formaDesenho === 'borracha' ? 'Clique ou arraste sobre desenhos e textos para apagar' : 'Escolha o formato e arraste no mapa'}</span>
             </div>
             {anotacaoSelecionada && <button className="anotacao-painel__fechar" onClick={onDeselecionarAnotacao} title="Fechar opções"><X size={16} /></button>}
           </header>
@@ -142,13 +143,15 @@ export default function MesaToolbar({
             </>
           )}
 
-          <label className="anotacao-painel__campo anotacao-painel__cor">
-            <span>Cor</span>
-            <input type="color" value={anotacaoSelecionada?.cor ?? corAnotacao}
-              onChange={(e) => anotacaoSelecionada ? alterarAnotacao({ cor: e.target.value }) : onCorAnotacaoChange?.(e.target.value)} />
-          </label>
+          {!(ferramenta === 'desenhar' && formaDesenho === 'borracha' && !anotacaoSelecionada) && (
+            <label className="anotacao-painel__campo anotacao-painel__cor">
+              <span>Cor</span>
+              <input type="color" value={anotacaoSelecionada?.cor ?? corAnotacao}
+                onChange={(e) => anotacaoSelecionada ? alterarAnotacao({ cor: e.target.value }) : onCorAnotacaoChange?.(e.target.value)} />
+            </label>
+          )}
 
-          {((['traco', 'forma'].includes(anotacaoSelecionada?.tipo)) || (!anotacaoSelecionada && ferramenta === 'desenhar')) && (
+          {((['traco', 'forma'].includes(anotacaoSelecionada?.tipo)) || (!anotacaoSelecionada && ferramenta === 'desenhar' && formaDesenho !== 'borracha')) && (
             <div className="anotacao-painel__campo">
               <span>Espessura</span>
               <div className="anotacao-painel__espessuras" role="group" aria-label="Espessura do traço">
