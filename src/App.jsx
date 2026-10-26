@@ -17,14 +17,15 @@ import CanvasTextEditor from './components/CanvasTextEditor';
 import PainelManager from './components/manager';
 import './App.css';
 import { Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
+import { Users, X, Move, UserRoundPlus } from 'lucide-react';
 import { AuthProvider, useAuth } from './auth/AuthContext.jsx';
 import AuthPage from './pages/AuthPage.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
 import SessionsPage from './pages/SessionsPage.jsx';
 import PlayerView from './pages/PlayerView.jsx';
 import { collection, query, where, getDocs, doc, setDoc, serverTimestamp, updateDoc, onSnapshot } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from './auth/firebase.js';
+import { db } from './auth/firebase.js';
+import { salvarMapa } from './services/mapas.js';
 import {
   agendarSalvarAnotacao,
   agendarSalvarNevoa,
@@ -80,6 +81,8 @@ function EntrarSessao() {
           usuarioId: user.uid,
           email: user.email,
           papel: 'jogador',
+          podeMover: false,
+          podeAdicionar: false,
           adicionadoEm: serverTimestamp(),
         }, { merge: true });
         try {
@@ -175,6 +178,12 @@ function MesaRPG() {
   const [nometoken, setNomeToken]=useState(null)
   const [hpInputMenu, setHpInputMenu] = useState('');
   const [urlMapa, setUrlMapa] = useState(null);
+  const [erroCarregarMapa, setErroCarregarMapa] = useState(false);
+  const [jogadoresMesa, setJogadoresMesa] = useState([]);
+  const [jogadorPermissoes, setJogadorPermissoes] = useState(null);
+  const [erroPermissao, setErroPermissao] = useState('');
+  const [erroUploadMapa, setErroUploadMapa] = useState('');
+  const [enviandoMapa, setEnviandoMapa] = useState(false);
   const [ferramenta, setFerramenta] = useState('selecionar');
   const [formaDesenho, setFormaDesenho] = useState('livre');
   const [anotacoes, setAnotacoes] = useState([]);
@@ -221,6 +230,24 @@ function MesaRPG() {
     largura: window.innerWidth,
     altura: window.innerHeight,
   });
+  const [mapaImagemCarregado, setMapaImagemCarregado] = useState(false);
+  const mapaAjustadoRef = useRef(null);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage || !urlMapa || !mapaImagemCarregado || !tamanhoPalco.largura || !tamanhoPalco.altura) return;
+    if (mapaAjustadoRef.current === urlMapa) return;
+    const larguraVisivel = window.innerWidth;
+    const alturaVisivel = window.innerHeight;
+    const escala = Math.min(1, larguraVisivel / tamanhoPalco.largura, alturaVisivel / tamanhoPalco.altura);
+    stage.scale({ x: escala, y: escala });
+    stage.position({
+      x: (larguraVisivel - tamanhoPalco.largura * escala) / 2,
+      y: (alturaVisivel - tamanhoPalco.altura * escala) / 2,
+    });
+    stage.batchDraw();
+    mapaAjustadoRef.current = urlMapa;
+  }, [urlMapa, mapaImagemCarregado, tamanhoPalco]);
 
   useEffect(() => {
     const estadoAtual = { tokens, anotacoes, urlMapa };
@@ -263,9 +290,25 @@ function MesaRPG() {
     const unsubMapa = onSnapshot(doc(db, 'sessoes', sessaoAtiva, 'estado', 'mapa'), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
-        if (data.url) setUrlMapa(data.url);
+        if (data.url) {
+          if (data.url !== mapaAjustadoRef.current) {
+            mapaAjustadoRef.current = null;
+            setMapaImagemCarregado(false);
+          }
+          setErroCarregarMapa(false);
+          setUrlMapa(data.url);
+        }
       }
     });
+    const membrosQuery = query(collection(db, 'sessoesMembros'), where('sessaoId', '==', sessaoAtiva));
+    const unsubMembros = onSnapshot(membrosQuery, (snap) => {
+      const lista = snap.docs
+        .map((membro) => ({ id: membro.id, ...membro.data() }))
+        .filter((membro) => membro.papel !== 'mestre')
+        .sort((a, b) => (a.nome || a.email || '').localeCompare(b.nome || b.email || '', 'pt-BR'));
+      setJogadoresMesa(lista);
+      setJogadorPermissoes((atual) => atual ? (lista.find((jogador) => jogador.id === atual.id) || null) : null);
+    }, (err) => console.error('Erro ao ouvir jogadores da sessão:', err));
     const unsubAnotacoes = onSnapshot(collection(db, 'sessoes', sessaoAtiva, 'anotacoes'), (snap) => {
       const lista = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       setAnotacoes(lista);
@@ -283,6 +326,7 @@ function MesaRPG() {
     return () => {
       unsubTokens();
       unsubMapa();
+      unsubMembros();
       unsubAnotacoes();
       unsubNevoa();
     };
@@ -979,45 +1023,35 @@ function MesaRPG() {
   // Carregar Mapa de Imagem 📂
   const handleCarregarMapa = async (e) => {
     const arquivo = e.target.files[0];
-    if (arquivo) {
-      if (storage && sessaoAtiva) {
-        try {
-          const arquivoRef = ref(storage, `mapas/${sessaoAtiva}/${Date.now()}-${arquivo.name}`);
-          await uploadBytes(arquivoRef, arquivo);
-          const urlDownload = await getDownloadURL(arquivoRef);
-          setUrlMapa(urlDownload);
-          if (db) {
-            await setDoc(doc(db, 'sessoes', sessaoAtiva, 'estado', 'mapa'), {
-              url: urlDownload,
-              atualizadoEm: serverTimestamp()
-            }, { merge: true });
-          }
-        } catch (err) {
-          console.error('Erro ao enviar mapa:', err);
-        }
-      } else {
-        const reader = new FileReader();
-        reader.onload = async () => {
-          const dataUrl = reader.result;
-          setUrlMapa(dataUrl);
-          if (db && sessaoAtiva) {
-            try {
-              await setDoc(doc(db, 'sessoes', sessaoAtiva, 'estado', 'mapa'), {
-                url: dataUrl,
-                atualizadoEm: serverTimestamp()
-              }, { merge: true });
-            } catch (err) {
-              console.error('Erro ao salvar mapa:', err);
-            }
-          }
-        };
-        reader.readAsDataURL(arquivo);
-      }
+    e.target.value = '';
+    if (!arquivo || enviandoMapa) return;
+    setErroUploadMapa('');
+    if (!db || !sessaoAtiva) {
+      setErroUploadMapa('Selecione uma campanha para salvar o mapa.');
+      return;
+    }
+    if (!arquivo.type.startsWith('image/')) {
+      setErroUploadMapa('Escolha um arquivo de imagem válido.');
+      return;
+    }
+
+    setEnviandoMapa(true);
+    try {
+      const urlDownload = await salvarMapa(sessaoAtiva, arquivo);
+      mapaAjustadoRef.current = null;
+      setMapaImagemCarregado(false);
+      setUrlMapa(urlDownload);
+    } catch (err) {
+      console.error('Erro ao enviar mapa:', err);
+      setErroUploadMapa(err?.message || 'Não foi possível salvar o mapa no Firestore.');
+    } finally {
+      setEnviandoMapa(false);
     }
   };
 
   const handleMapaCarregado = useCallback(async ({ largura, altura }) => {
     setTamanhoPalco({ largura, altura });
+    setMapaImagemCarregado(true);
     if (db && sessaoAtiva) {
       try {
         await setDoc(doc(db, 'sessoes', sessaoAtiva, 'estado', 'mapa'), {
@@ -1030,6 +1064,17 @@ function MesaRPG() {
       }
     }
   }, [sessaoAtiva]);
+
+  const alterarPermissaoJogador = async (jogador, permissao, permitido) => {
+    if (!db || !jogador.id) return;
+    setErroPermissao('');
+    try {
+      await updateDoc(doc(db, 'sessoesMembros', jogador.id), { [permissao]: permitido });
+    } catch (err) {
+      console.error('Erro ao atualizar permissão do jogador:', err);
+      setErroPermissao(`Não foi possível salvar a permissão (${err?.code || 'firestore/unknown'}).`);
+    }
+  };
 
   // Controle de Zoom e Pan 🔍
   const handleWheel = (e) => {
@@ -1188,6 +1233,46 @@ function MesaRPG() {
         onJanelaManager={()=> setJanelaManager(!janelaManager)}
         managerAberto={janelaManager}
       />
+      {sessaoAtiva && (
+        <aside className="mesa-jogadores" aria-label="Jogadores da campanha">
+          <h2><Users size={16} /> Jogadores <span>{jogadoresMesa.length}</span></h2>
+          {jogadoresMesa.length ? (
+            <ul>{jogadoresMesa.map((jogador) => (
+              <li key={jogador.id}>
+                <button className="mesa-jogadores__selecionar" type="button" onClick={() => { setErroPermissao(''); setJogadorPermissoes(jogador); }}>
+                  {jogador.nome || jogador.email || 'Jogador'}
+                </button>
+              </li>
+            ))}</ul>
+          ) : <p>Nenhum jogador entrou ainda.</p>}
+        </aside>
+      )}
+      {jogadorPermissoes && (
+        <div className="permissoes-jogador__fundo" onMouseDown={(e) => { if (e.target === e.currentTarget) setJogadorPermissoes(null); }}>
+          <section className="permissoes-jogador" role="dialog" aria-modal="true" aria-labelledby="permissoes-jogador-titulo">
+            <header>
+              <div><span>PERMISSÕES</span><h2 id="permissoes-jogador-titulo">{jogadorPermissoes.nome || jogadorPermissoes.email || 'Jogador'}</h2></div>
+              <button type="button" onClick={() => setJogadorPermissoes(null)} aria-label="Fechar"><X size={17} /></button>
+            </header>
+            <label><Move size={16} /><input type="checkbox" checked={Boolean(jogadorPermissoes.podeMover)} onChange={(e) => {
+              const permitido = e.target.checked;
+              setJogadorPermissoes((atual) => ({ ...atual, podeMover: permitido }));
+              alterarPermissaoJogador(jogadorPermissoes, 'podeMover', permitido);
+            }} /> Pode mover itens no mapa</label>
+            <label><UserRoundPlus size={16} /><input type="checkbox" checked={Boolean(jogadorPermissoes.podeAdicionar)} onChange={(e) => {
+              const permitido = e.target.checked;
+              setJogadorPermissoes((atual) => ({ ...atual, podeAdicionar: permitido }));
+              alterarPermissaoJogador(jogadorPermissoes, 'podeAdicionar', permitido);
+            }} /> Pode colocar tokens no mapa</label>
+            {erroPermissao && <p className="mesa-jogadores__erro" role="alert">{erroPermissao}</p>}
+          </section>
+        </div>
+      )}
+      {(erroUploadMapa || erroCarregarMapa || enviandoMapa) && (
+        <p className={`mapa-upload-status${erroUploadMapa || erroCarregarMapa ? ' mapa-upload-status--erro' : ''}`} role={erroUploadMapa || erroCarregarMapa ? 'alert' : 'status'}>
+          {erroUploadMapa || (erroCarregarMapa ? 'O mapa foi encontrado, mas a imagem não carregou. Tente enviar a imagem novamente.' : 'Salvando mapa...')}
+        </p>
+      )}
       {janelaManager &&(
         <PainelManager
           isOpen={janelaManager}
@@ -1505,7 +1590,7 @@ function MesaRPG() {
       >
         {/* Camada 1: Mapa de Imagem 🖼️ */}
         <Layer>
-          {urlMapa && <MapaImagem url={urlMapa} onMapaCarregado={handleMapaCarregado} />}
+          {urlMapa && <MapaImagem url={urlMapa} onMapaCarregado={handleMapaCarregado} onErro={() => setErroCarregarMapa(true)} />}
         </Layer>
 
         {/* Camada 2: Grid 📐 */}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Users, UserPlus, Dices, Trash2, Copy, Check, KeyRound } from 'lucide-react';
+import { Plus, Users, UserPlus, Dices, Trash2, Copy, Check, KeyRound } from 'lucide-react';
 import { collection, addDoc, query, where, getDocs, serverTimestamp, doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { db } from '../auth/firebase.js';
@@ -36,12 +36,22 @@ export default function SessionsPage() {
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState('');
   const [sessoes, setSessoes] = useState([]);
+  const [jogadoresPorSessao, setJogadoresPorSessao] = useState({});
   const [carregando, setCarregando] = useState(true);
   const [gerandoConvite, setGerandoConvite] = useState({});
   const [convites, setConvites] = useState({});
   const [copiado, setCopiado] = useState('');
   const [codigoEntrada, setCodigoEntrada] = useState('');
   const [entrando, setEntrando] = useState(false);
+  const [pagina, setPagina] = useState('sessoes');
+  const [paginaSessoes, setPaginaSessoes] = useState(1);
+  const sessoesPorPagina = 5;
+  const totalPaginasSessoes = Math.max(1, Math.ceil(sessoes.length / sessoesPorPagina));
+  const sessoesVisiveis = sessoes.slice((paginaSessoes - 1) * sessoesPorPagina, paginaSessoes * sessoesPorPagina);
+
+  useEffect(() => {
+    setPaginaSessoes((atual) => Math.min(atual, totalPaginasSessoes));
+  }, [totalPaginasSessoes]);
 
   const carregar = useCallback(async () => {
     if (authLoading) return;
@@ -70,6 +80,15 @@ export default function SessionsPage() {
       }
       const todas = [...minhas, ...membroSessoes].sort((a, b) => getTimestamp(b.criadoEm) - getTimestamp(a.criadoEm));
       setSessoes(todas);
+      const membrosDasSessoes = await Promise.all(minhas.map(async (sessao) => {
+        const membrosSnap = await getDocs(query(collection(db, 'sessoesMembros'), where('sessaoId', '==', sessao.id)));
+        const jogadores = membrosSnap.docs
+          .map((m) => m.data())
+          .filter((membro) => membro.papel !== 'mestre' && membro.usuarioId !== user.uid)
+          .map((membro) => ({ id: membro.usuarioId, nome: membro.nome || membro.email || 'Jogador' }));
+        return [sessao.id, jogadores];
+      }));
+      setJogadoresPorSessao(Object.fromEntries(membrosDasSessoes));
     } catch (e) {
       console.error('Erro ao carregar sessões:', e);
       setErro(e?.message || 'Não foi possível carregar as sessões.');
@@ -204,7 +223,10 @@ export default function SessionsPage() {
         sessaoId,
         usuarioId: user.uid,
         email: user.email,
+        nome: user.displayName || '',
         papel: 'jogador',
+        podeMover: false,
+        podeAdicionar: false,
         adicionadoEm: serverTimestamp(),
       });
       try {
@@ -260,7 +282,6 @@ export default function SessionsPage() {
   return (
     <main className="sessions-page">
       <header className="sessions-topbar">
-        <span className="sessions-back" style={{ visibility: 'hidden' }}><ArrowLeft size={17} /> Voltar</span>
         <div className="sessions-brand">
           <span className="sessions-mark"><Dices size={18} strokeWidth={1.8} /></span>
           <span>VTT</span>
@@ -270,15 +291,21 @@ export default function SessionsPage() {
       <section className="sessions-content">
         <div className="sessions-heading">
           <p>SESSÕES</p>
-          <h1>Gerenciamento de Sessões</h1>
-          <span>Crie sessões, gerencie jogadores e convide pessoas para sua mesa.</span>
+          <h1>{pagina === 'sessoes' ? 'Minhas sessões' : pagina === 'criar' ? 'Criar sessão' : 'Entrar em uma sessão'}</h1>
+          <span>{pagina === 'sessoes' ? 'Acesse suas mesas e gerencie os convites dos jogadores.' : pagina === 'criar' ? 'Prepare uma nova mesa para sua campanha.' : 'Use o código de convite enviado pelo mestre.'}</span>
         </div>
+
+        <nav className="sessions-nav" aria-label="Seções de sessões">
+          <button type="button" className={pagina === 'sessoes' ? 'is-active' : ''} aria-current={pagina === 'sessoes' ? 'page' : undefined} onClick={() => setPagina('sessoes')}><Users size={17} /> Minhas sessões <span>{sessoes.length}</span></button>
+          <button type="button" className={pagina === 'criar' ? 'is-active' : ''} aria-current={pagina === 'criar' ? 'page' : undefined} onClick={() => setPagina('criar')}><Plus size={17} /> Criar sessão</button>
+          <button type="button" className={pagina === 'entrar' ? 'is-active' : ''} aria-current={pagina === 'entrar' ? 'page' : undefined} onClick={() => setPagina('entrar')}><KeyRound size={17} /> Entrar com código</button>
+        </nav>
 
         {erro && <p className="sessions-error" role="alert">{erro}</p>}
         {sucesso && <p className="sessions-success" role="status">{sucesso}</p>}
 
-        <div className="sessions-grid">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 24, gridColumn: '1 / span 5' }}>
+        <div className="sessions-page-content">
+          {pagina === 'criar' && <div className="sessions-form-page">
             <Card className="sessions-card">
               <CardHeader className="sessions-card-header">
                 <CardTitle className="sessions-card-title"><Plus size={18} /> Nova sessão</CardTitle>
@@ -303,6 +330,9 @@ export default function SessionsPage() {
               </CardContent>
             </Card>
 
+          </div>}
+
+          {pagina === 'entrar' && <div className="sessions-form-page sessions-form-page--compact">
             <Card className="sessions-card">
               <CardHeader className="sessions-card-header">
                 <CardTitle className="sessions-card-title"><KeyRound size={18} /> Entrar com código</CardTitle>
@@ -320,9 +350,9 @@ export default function SessionsPage() {
                 </form>
               </CardContent>
             </Card>
-          </div>
+          </div>}
 
-          <Card className="sessions-card sessions-card--list">
+          {pagina === 'sessoes' && <Card className="sessions-card sessions-card--list">
             <CardHeader className="sessions-card-header">
               <CardTitle className="sessions-card-title"><Users size={18} /> Minhas sessões</CardTitle>
               <CardDescription>Gerencie suas sessões e convide jogadores.</CardDescription>
@@ -331,10 +361,10 @@ export default function SessionsPage() {
               {carregando ? (
                 <p className="sessions-loading">Carregando...</p>
               ) : sessoes.length === 0 ? (
-                <p className="sessions-empty">Nenhuma sessão ainda. Crie a primeira acima.</p>
+                <p className="sessions-empty">Nenhuma sessão por aqui. Crie uma mesa ou entre usando um convite.</p>
               ) : (
                 <div className="sessions-list">
-                  {sessoes.map((s) => (
+                  {sessoesVisiveis.map((s) => (
                     <article key={s.id} className="session-item">
                       <div className="session-item__header">
                         <div>
@@ -343,7 +373,7 @@ export default function SessionsPage() {
                           <span className={`session-item__badge session-item__badge--${s.papel}`}>{s.papel === 'mestre' ? 'Mestre' : 'Jogador'}</span>
                         </div>
                         {s.papel === 'mestre' && (
-                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          <div className="session-item__actions">
                             <Button size="sm" variant="outline" onClick={() => navigate(`/mesa/${s.id}`)}>
                               Abrir mesa
                             </Button>
@@ -356,7 +386,7 @@ export default function SessionsPage() {
                           </div>
                         )}
                         {s.papel === 'jogador' && (
-                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          <div className="session-item__actions">
                             <Button size="sm" variant="outline" onClick={() => navigate(`/jogador/${s.id}`)}>
                               Entrar na mesa
                             </Button>
@@ -364,30 +394,56 @@ export default function SessionsPage() {
                         )}
                       </div>
                       {s.papel === 'mestre' && (
-                        <div className="session-item__invite">
-                          <Label>Código de convite</Label>
-                          <div className="session-item__invite-row">
-                            <Button onClick={() => gerarConvite(s.id)} disabled={gerandoConvite[s.id]} size="sm">
-                              <UserPlus size={16} /> {gerandoConvite[s.id] ? 'Gerando...' : 'Gerar código'}
-                            </Button>
-                            {convites[s.id] && (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                <code style={{ padding: '6px 10px', borderRadius: 4, background: 'rgba(var(--primary-rgb), 0.25)', letterSpacing: '0.3em' }}>{convites[s.id]}</code>
-                                <Button size="sm" variant="outline" onClick={() => copiarCodigo(convites[s.id])}>
-                                  {copiado === convites[s.id] ? <Check size={16} /> : <Copy size={16} />} {copiado === convites[s.id] ? 'Copiado' : 'Copiar'}
-                                </Button>
-                              </div>
-                            )}
+                        <div className="session-item__management">
+                          <section className="session-item__players" aria-label={`Jogadores de ${s.nome}`}>
+                            <h4>Jogadores <span>{(jogadoresPorSessao[s.id] || []).length}</span></h4>
+                            {(jogadoresPorSessao[s.id] || []).length > 0 ? (
+                              <ul>
+                                {jogadoresPorSessao[s.id].map((jogador) => (
+                                  <li key={jogador.id || jogador.nome}><Users size={15} /><span>{jogador.nome}</span></li>
+                                ))}
+                              </ul>
+                            ) : <p>Nenhum jogador entrou nesta sessão ainda.</p>}
+                          </section>
+                          <div className="session-item__invite">
+                            <Label>Código de convite</Label>
+                            <div className="session-item__invite-row">
+                              <Button onClick={() => gerarConvite(s.id)} disabled={gerandoConvite[s.id]} size="sm">
+                                <UserPlus size={16} /> {gerandoConvite[s.id] ? 'Gerando...' : 'Gerar código'}
+                              </Button>
+                              {convites[s.id] && (
+                                <div className="session-item__code">
+                                  <code>{convites[s.id]}</code>
+                                  <Button size="sm" variant="outline" onClick={() => copiarCodigo(convites[s.id])}>
+                                    {copiado === convites[s.id] ? <Check size={16} /> : <Copy size={16} />} {copiado === convites[s.id] ? 'Copiado' : 'Copiar'}
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                            <small>Envie esse código para o jogador entrar na sessão.</small>
                           </div>
-                          <small>Envie esse código para o jogador entrar na sessão.</small>
                         </div>
                       )}
                     </article>
                   ))}
                 </div>
               )}
+              {!carregando && sessoes.length > sessoesPorPagina && (
+                <nav className="sessions-pagination" aria-label="Paginação das sessões">
+                  <span>Mostrando {((paginaSessoes - 1) * sessoesPorPagina) + 1}–{Math.min(paginaSessoes * sessoesPorPagina, sessoes.length)} de {sessoes.length}</span>
+                  <div>
+                    <Button type="button" size="sm" variant="outline" onClick={() => setPaginaSessoes((atual) => Math.max(1, atual - 1))} disabled={paginaSessoes === 1}>
+                      Anterior
+                    </Button>
+                    <span className="sessions-pagination__page">Página {paginaSessoes} de {totalPaginasSessoes}</span>
+                    <Button type="button" size="sm" variant="outline" onClick={() => setPaginaSessoes((atual) => Math.min(totalPaginasSessoes, atual + 1))} disabled={paginaSessoes === totalPaginasSessoes}>
+                      Próxima
+                    </Button>
+                  </div>
+                </nav>
+              )}
             </CardContent>
-          </Card>
+          </Card>}
         </div>
       </section>
     </main>

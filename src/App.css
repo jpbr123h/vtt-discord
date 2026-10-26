@@ -276,6 +276,71 @@ html, body, #root {
 }
 .mesa-toolbar__arquivo input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
 
+.mesa-jogadores {
+  position: absolute;
+  z-index: 10;
+  top: 20px;
+  right: 20px;
+  width: min(250px, calc(100vw - 110px));
+  max-height: min(42vh, 360px);
+  padding: 13px;
+  overflow: auto;
+  border: 1px solid var(--ui-line);
+  border-radius: 12px;
+  background: rgba(var(--surface-rgb), .96);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .34);
+  backdrop-filter: blur(12px);
+}
+
+.mesa-jogadores h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mesa-jogadores h2 svg { color: var(--primary-hover); }
+.mesa-jogadores h2 span { margin-left: auto; color: var(--text-dim); font-size: 11px; }
+.mesa-jogadores ul { display: grid; gap: 6px; margin-top: 10px; padding: 0; list-style: none; }
+.mesa-jogadores li { padding: 7px 9px; overflow-wrap: anywhere; border: 1px solid var(--ui-line); border-radius: 8px; color: var(--text-dim); font-size: 11px; }
+.mesa-jogadores__selecionar { width: 100%; padding: 7px 9px; border: 0; background: transparent; color: var(--text-dim); font: inherit; font-size: 11px; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.mesa-jogadores__selecionar:hover { color: var(--text); }
+.mesa-jogadores__erro { margin-top: 10px; color: #ffb0b6 !important; }
+.mesa-jogadores > p { margin-top: 10px; color: var(--text-dim); font-size: 11px; }
+
+.permissoes-jogador__fundo { position: fixed; z-index: 30; inset: 0; display: grid; place-items: center; padding: 18px; background: rgba(0, 0, 0, .55); backdrop-filter: blur(3px); }
+.permissoes-jogador { width: min(360px, 100%); padding: 18px; border: 1px solid var(--ui-line); border-radius: 14px; background: var(--surface); color: var(--text); box-shadow: 0 24px 70px rgba(0, 0, 0, .5); }
+.permissoes-jogador header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 17px; }
+.permissoes-jogador header span { color: var(--text-dim); font-size: 9px; font-weight: 700; letter-spacing: .16em; }
+.permissoes-jogador h2 { margin-top: 5px; overflow-wrap: anywhere; font-family: var(--font-display); font-size: 16px; }
+.permissoes-jogador header button { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; border: 1px solid var(--ui-line); border-radius: 8px; background: var(--surface2); color: var(--text-dim); cursor: pointer; }
+.permissoes-jogador > label { display: flex; align-items: center; gap: 9px; padding: 11px 0; border-top: 1px solid var(--ui-line); color: var(--text-dim); font-size: 12px; cursor: pointer; }
+.permissoes-jogador > label > svg { flex: 0 0 auto; color: var(--primary-hover); }
+.permissoes-jogador input { width: 15px; height: 15px; accent-color: var(--primary-hover); }
+
+.mapa-upload-status {
+  position: absolute;
+  z-index: 11;
+  top: 90px;
+  left: 82px;
+  max-width: min(420px, calc(100vw - 100px));
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--ui-line);
+  border-radius: 10px;
+  background: rgba(var(--surface-rgb), .96);
+  color: var(--text);
+  font-size: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .28);
+}
+
+.mapa-upload-status--erro {
+  border-color: rgba(248, 113, 113, .55);
+  color: #ffb0b6;
+}
+
 /* ---------------------------------------------------------------- */
 /* Menu de contexto do token                                         */
 /* ---------------------------------------------------------------- */
@@ -435,6 +500,40 @@ html, body, #root {
 .anotacao-painel .anotacao-painel__espaco button { min-height: 28px; padding: 0; border-radius: var(--radius); box-shadow: none; }
 .anotacao-painel__apagar, .anotacao-painel__limpar { width: 100%; min-height: 38px !important; margin-top: 8px; justify-content: flex-start !important; padding: 0 10px !important; border-color: rgba(239, 68, 68, .35) !important; background: rgba(239, 68, 68, .12) !important; color: #ffadb5 !important; box-shadow: none !important; }
 .anotacao-painel__apagar:hover, .anotacao-painel__limpar:hover { background: rgba(239, 68, 68, .2) !important; }
+.anotacao-painel .anotacao-painel__limpar--desenhos {
+  display: flex;
+  align-items: center;
+  min-height: 44px !important;
+  margin-top: 12px;
+  gap: 10px;
+  padding: 5px 12px !important;
+  border: 1px solid rgba(248, 113, 113, .28) !important;
+  border-radius: 10px;
+  background: linear-gradient(110deg, rgba(239, 68, 68, .16), rgba(239, 68, 68, .07)) !important;
+  color: #ffc0c5 !important;
+  font: 600 11px var(--font-body);
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+.anotacao-painel .anotacao-painel__limpar--desenhos svg {
+  display: block;
+  flex: 0 0 auto;
+  box-sizing: content-box;
+  width: 15px;
+  height: 15px;
+  padding: 6px;
+  border-radius: 7px;
+  background: rgba(248, 113, 113, .15);
+  color: #ff929c;
+}
+.anotacao-painel .anotacao-painel__limpar--desenhos:hover {
+  transform: translateY(-1px);
+  border-color: rgba(248, 113, 113, .55) !important;
+  background: rgba(239, 68, 68, .2) !important;
+}
+.anotacao-painel .anotacao-painel__limpar--desenhos:focus-visible {
+  outline: 2px solid rgba(248, 113, 113, .75);
+  outline-offset: 2px;
+}
 
 @media (max-width: 560px) {
   .mesa-toolbox { top: 10px; left: 10px; gap: 8px; }

@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Stage, Layer, Line, Text, Rect, Group, Ellipse } from 'react-konva';
-import { ArrowLeft, Users, Eye } from 'lucide-react';
+import { ArrowLeft, Users, Eye, Plus, X } from 'lucide-react';
 import { doc, getDoc, onSnapshot, collection } from 'firebase/firestore';
+import { useAuth } from '../auth/AuthContext.jsx';
 import { db } from '../auth/firebase.js';
 import { excluirAnotacao, salvarAnotacao, salvarToken } from '../services/mesa.js';
+import { novoId } from '../utils/id.js';
 import MapaImagem from '../components/MapaImagem';
 import TokenNode from '../components/TokenNode';
 import GridLayer from '../components/GridLayer';
@@ -19,6 +21,7 @@ const ESCALA_MAXIMA = 4;
 export default function PlayerView() {
   const { sessaoId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const stageRef = useRef(null);
   const tokenNodeRefs = useRef(new Map());
   const [sessao, setSessao] = useState(null);
@@ -27,8 +30,12 @@ export default function PlayerView() {
   const [tokens, setTokens] = useState([]);
   const [anotacoes, setAnotacoes] = useState([]);
   const [urlMapa, setUrlMapa] = useState(null);
+  const [erroMapaImagem, setErroMapaImagem] = useState(false);
+  const [mapaImagemCarregado, setMapaImagemCarregado] = useState(false);
   const [nevoa, setNevoa] = useState({ ativo: false, celulas: {} });
-  const [tamanhoPalco, setTamanhoPalco] = useState({ largura: 0, altura: 0 });
+  const [permissoes, setPermissoes] = useState({ podeMover: false, podeAdicionar: false });
+  const [modoColocarToken, setModoColocarToken] = useState(false);
+  const [tamanhoPalco, setTamanhoPalco] = useState({ largura: window.innerWidth, altura: window.innerHeight });
   const [tamanhoTela, setTamanhoTela] = useState({ largura: window.innerWidth, altura: window.innerHeight });
   const [menuNota, setMenuNota] = useState(null);
   const anotacaoRefs = useRef(new Map());
@@ -71,9 +78,13 @@ export default function PlayerView() {
     const unsubMapa = onSnapshot(doc(db, 'sessoes', sessaoId, 'estado', 'mapa'), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
-        if (data.url) setUrlMapa(data.url);
-        if (data.largura && data.altura) {
-          setTamanhoPalco({ largura: data.largura, altura: data.altura });
+        if (data.url) {
+          if (data.url !== mapaAjustadoRef.current) {
+            mapaAjustadoRef.current = null;
+            setMapaImagemCarregado(false);
+          }
+          setErroMapaImagem(false);
+          setUrlMapa(data.url);
         }
       } else {
         setUrlMapa(null);
@@ -104,6 +115,24 @@ export default function PlayerView() {
       unsubNevoa();
     };
   }, [sessaoId]);
+
+  useEffect(() => {
+    if (!db || !sessaoId || !user?.uid) {
+      setPermissoes({ podeMover: false, podeAdicionar: false });
+      return undefined;
+    }
+    return onSnapshot(doc(db, 'sessoesMembros', `${sessaoId}_${user.uid}`), (snap) => {
+      const membro = snap.exists() ? snap.data() : {};
+      setPermissoes({ podeMover: Boolean(membro.podeMover), podeAdicionar: Boolean(membro.podeAdicionar) });
+    }, (err) => {
+      console.error('Erro ao carregar permissões:', err);
+      setPermissoes({ podeMover: false, podeAdicionar: false });
+    });
+  }, [sessaoId, user?.uid]);
+
+  useEffect(() => {
+    if (!permissoes.podeAdicionar) setModoColocarToken(false);
+  }, [permissoes.podeAdicionar]);
 
   const handleWheel = (e) => {
     e.evt.preventDefault();
@@ -136,7 +165,7 @@ export default function PlayerView() {
   const mapaAjustadoRef = useRef(null);
   useEffect(() => {
     const stage = stageRef.current;
-    if (!stage || !urlMapa || !tamanhoPalco.largura || !tamanhoPalco.altura) return;
+    if (!stage || !urlMapa || !mapaImagemCarregado || !tamanhoPalco.largura || !tamanhoPalco.altura) return;
     if (mapaAjustadoRef.current === urlMapa) return;
     const larguraVisivel = Math.max(320, window.innerWidth);
     const alturaVisivel = Math.max(240, window.innerHeight - 64);
@@ -148,7 +177,7 @@ export default function PlayerView() {
     });
     stage.batchDraw();
     mapaAjustadoRef.current = urlMapa;
-  }, [urlMapa, tamanhoPalco]);
+  }, [urlMapa, mapaImagemCarregado, tamanhoPalco]);
 
   // Garante que o pan termine mesmo se o botão for solto fora do palco.
   useEffect(() => {
@@ -190,6 +219,31 @@ export default function PlayerView() {
     return valor === undefined ? true : Number(valor) > 0;
   };
 
+  const colocarTokenNoMapa = (e) => {
+    if (!modoColocarToken || !permissoes.podeAdicionar || e.target !== e.target.getStage()) return;
+    const stage = e.target.getStage();
+    const ponteiro = stage.getRelativePointerPosition();
+    if (!ponteiro) return;
+    const raio = TAMANHO_GRID / 2;
+    const x = Math.max(raio, Math.min(tamanhoPalco.largura - raio, Math.floor(ponteiro.x / TAMANHO_GRID) * TAMANHO_GRID + raio));
+    const y = Math.max(raio, Math.min(tamanhoPalco.altura - raio, Math.floor(ponteiro.y / TAMANHO_GRID) * TAMANHO_GRID + raio));
+    if (tokenSobNevoa({ x, y })) return;
+    const token = {
+      id: novoId(),
+      x,
+      y,
+      cor: '#7c3aed',
+      imagem: null,
+      nome: user?.displayName || user?.email?.split('@')[0] || 'Personagem',
+      vida: 0,
+      vidamax: 0,
+      donoId: user.uid,
+    };
+    setTokens((atuais) => [...atuais, token]);
+    salvarToken(sessaoId, token);
+    setModoColocarToken(false);
+  };
+
   return (
     <div className="playerview-page">
       <header className="playerview-header">
@@ -206,13 +260,21 @@ export default function PlayerView() {
         <div className="playerview-meta">
           <Users size={16} />
           <span>{tokens.length} token{tokens.length === 1 ? '' : 's'}</span>
+          {permissoes.podeAdicionar && (
+            <Button size="sm" variant={modoColocarToken ? 'secondary' : 'outline'} onClick={() => setModoColocarToken((ativo) => !ativo)}>
+              {modoColocarToken ? <X size={15} /> : <Plus size={15} />}
+              {modoColocarToken ? 'Cancelar' : 'Colocar personagem'}
+            </Button>
+          )}
         </div>
       </header>
+      {modoColocarToken && <p className="playerview-placement-hint" role="status">Clique em uma célula vazia para colocar seu personagem.</p>}
       <Stage
         ref={stageRef}
         width={tamanhoTela.largura}
         height={tamanhoTela.altura}
         onWheel={handleWheel}
+        onClick={colocarTokenNoMapa}
         onContextMenu={(e) => e.evt.preventDefault()}
         draggable={false}
         onMouseDown={(e) => {
@@ -256,11 +318,11 @@ export default function PlayerView() {
         }}
       >
         <Layer>
-          {urlMapa ? <MapaImagem url={urlMapa} onMapaCarregado={({ largura, altura }) => setTamanhoPalco((atual) => (
-            atual.largura === largura && atual.altura === altura ? atual : { largura, altura }
-          ))} /> : null}
+          {urlMapa ? <MapaImagem url={urlMapa} onErro={() => setErroMapaImagem(true)} onMapaCarregado={({ largura, altura }) => {
+            setTamanhoPalco((atual) => (atual.largura === largura && atual.altura === altura ? atual : { largura, altura }));
+            setMapaImagemCarregado(true);
+          }} /> : null}
         </Layer>
-        <GridLayer largura={tamanhoPalco.largura} altura={tamanhoPalco.altura} tamanhoCelula={TAMANHO_GRID} />
         <Layer>
           {anotacoes.map((item) => item.tipo === 'traco' ? (
             <Line
@@ -271,10 +333,11 @@ export default function PlayerView() {
               strokeWidth={item.espessura}
               x={item.offsetX || 0}
               y={item.offsetY || 0}
-              draggable
+              draggable={permissoes.podeMover}
               lineCap="round"
               lineJoin="round"
               onDragEnd={(e) => {
+                if (!permissoes.podeMover) return;
                 const nova = { ...item, offsetX: e.target.x(), offsetY: e.target.y() };
                 setAnotacoes((atuais) => atuais.map((a) => (a.id === item.id ? nova : a)));
                 salvarAnotacao(sessaoId, nova);
@@ -286,8 +349,9 @@ export default function PlayerView() {
               ref={(node) => { if (node) anotacaoRefs.current.set(item.id, node); else anotacaoRefs.current.delete(item.id); }}
               x={item.x}
               y={item.y}
-              draggable
+              draggable={permissoes.podeMover}
               onDragEnd={(e) => {
+                if (!permissoes.podeMover) return;
                 const nova = { ...item, x: e.target.x(), y: e.target.y() };
                 setAnotacoes((atuais) => atuais.map((a) => (a.id === item.id ? nova : a)));
                 salvarAnotacao(sessaoId, nova);
@@ -307,14 +371,16 @@ export default function PlayerView() {
               ref={(node) => { if (node) anotacaoRefs.current.set(item.id, node); else anotacaoRefs.current.delete(item.id); }}
               x={item.x}
               y={item.y}
-              draggable
+              draggable={permissoes.podeMover}
               onDragEnd={(e) => {
+                if (!permissoes.podeMover) return;
                 const nova = { ...item, x: e.target.x(), y: e.target.y() };
                 setAnotacoes((atuais) => atuais.map((a) => (a.id === item.id ? nova : a)));
                 salvarAnotacao(sessaoId, nova);
               }}
               onContextMenu={(e) => {
                 e.evt.preventDefault();
+                if (!permissoes.podeMover) return;
                 if (panMoveuRef.current) {
                   panMoveuRef.current = false;
                   return;
@@ -331,8 +397,20 @@ export default function PlayerView() {
             </Group>
           ) : null)}
         </Layer>
+        {/* Mantém a grade visível sobre a névoa, sem revelar mapa ou anotações. */}
+        <FogLayer
+          largura={tamanhoPalco.largura}
+          altura={tamanhoPalco.altura}
+          ativo={nevoa.ativo}
+          celulas={nevoa.celulas}
+          tamanhoCelula={TAMANHO_GRID}
+          opacidadeMaxima={1}
+          cor="#000000"
+          opaco
+        />
+        <GridLayer largura={tamanhoPalco.largura} altura={tamanhoPalco.altura} tamanhoCelula={TAMANHO_GRID} />
         <Layer>
-          {tokens.map((tk) => (
+          {tokens.filter((tk) => !tokenSobNevoa(tk)).map((tk) => (
             <TokenNode
               key={tk.id}
               ref={(node) => { if (node) tokenNodeRefs.current.set(tk.id, node); else tokenNodeRefs.current.delete(tk.id); }}
@@ -340,13 +418,14 @@ export default function PlayerView() {
               raio={TAMANHO_GRID / 2 - 2}
               selecionado={false}
               medindo={false}
-              interativo={!tokenSobNevoa(tk)}
+              interativo={permissoes.podeMover && !tokenSobNevoa(tk)}
               ferramenta="selecionar"
               onSelecionar={() => {}}
               onDuploClique={() => {}}
               onArrasteInicio={() => {}}
               onArraste={() => {}}
               onArrasteFim={(e) => {
+                if (!permissoes.podeMover) return;
                 const circulo = e.target;
                 const raio = TAMANHO_GRID / 2;
                 const coluna = Math.floor(circulo.x() / TAMANHO_GRID);
@@ -367,18 +446,8 @@ export default function PlayerView() {
             />
           ))}
         </Layer>
-        {/* Para o jogador a névoa fica acima dos tokens: o que estiver coberto desaparece. */}
-        <FogLayer
-          largura={tamanhoPalco.largura}
-          altura={tamanhoPalco.altura}
-          ativo={nevoa.ativo}
-          celulas={nevoa.celulas}
-          tamanhoCelula={TAMANHO_GRID}
-          opacidadeMaxima={1}
-          cor="#000000"
-          opaco
-        />
       </Stage>
+      {erroMapaImagem && <p className="playerview-map-error" role="alert">O mapa da campanha não carregou. Peça ao mestre para enviar a imagem novamente.</p>}
       {menuNota && (() => {
         const nota = anotacoes.find((a) => a.id === menuNota.id && a.tipo === 'texto');
         if (!nota) return null;

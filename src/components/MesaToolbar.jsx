@@ -221,7 +221,10 @@ export default function MesaToolbar({
           {anotacaoSelecionada ? (
             <button className="anotacao-painel__apagar" onClick={onExcluirAnotacao}><Trash2 size={16} /> Apagar item</button>
           ) : quantidadeAnotacoes > 0 && (
-            <button className="anotacao-painel__limpar" onClick={onLimparAnotacoes}><Eraser size={16} /> Limpar desenhos e textos</button>
+            <button type="button" className="anotacao-painel__limpar anotacao-painel__limpar--desenhos" onClick={onLimparAnotacoes}>
+              <Eraser size={16} />
+              <span>Limpar desenhos e textos</span>
+            </button>
           )}
         </section>
       )}

@@ -73,7 +73,10 @@
 .sessions-heading {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
 }
 
 .sessions-heading p {
@@ -86,6 +89,7 @@
 
 .sessions-heading h1 {
   margin: 0;
+  line-height: 1.12;
   color: var(--text);
   font-family: var(--font-display);
   font-size: clamp(30px, 4vw, 48px);
@@ -94,7 +98,10 @@
 }
 
 .sessions-heading span {
+  display: block;
+  max-width: 620px;
   color: var(--text-dim);
+  line-height: 1.6;
 }
 
 .sessions-grid {
@@ -105,7 +112,8 @@
 }
 
 .sessions-card {
-  grid-column: 1 / span 5;
+  grid-column: 1 / -1;
+  gap: 0;
   border: 1px solid var(--ui-line);
   border-radius: var(--radius-panel);
   background: var(--surface);
@@ -114,13 +122,14 @@
 }
 
 .sessions-card--list {
-  grid-column: 6 / span 7;
+  grid-column: 1 / -1;
 }
 
 .sessions-card-header {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  padding: 24px 26px 0;
 }
 
 .sessions-card-title {
@@ -137,6 +146,7 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+  padding: 20px 26px 26px;
 }
 
 .sessions-form {
@@ -192,45 +202,81 @@
 .sessions-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
+}
+
+.sessions-card--list .sessions-card-content {
+  gap: 14px;
+  padding: 18px 18px 20px;
+}
+
+.sessions-pagination,
+.sessions-pagination > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sessions-pagination {
+  padding-top: 18px;
+  border-top: 1px solid var(--ui-line);
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.sessions-pagination__page {
+  white-space: nowrap;
 }
 
 .session-item {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 18px;
-  border-radius: 8px;
-  border: 1px solid var(--ui-line);
-  background: var(--surface2);
+  min-width: 0;
+  padding: 16px 18px;
+  border: 1px solid rgba(var(--primary-rgb), .2);
+  border-radius: 16px;
+  background: linear-gradient(120deg, rgba(var(--primary-rgb), .08), transparent 58%), var(--surface2);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .025), 0 8px 24px rgba(0, 0, 0, .12);
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+
+.session-item:hover {
+  border-color: rgba(var(--primary-rgb), .42);
+  transform: translateY(-1px);
 }
 
 .session-item__header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 20px;
+  min-width: 0;
 }
 
 .session-item__header h3 {
   margin: 0;
   color: var(--text);
   font-family: var(--font-display);
-  font-size: 19px;
+  font-size: 20px;
   font-weight: 600;
+  line-height: 1.3;
 }
 
 .session-item__header p {
-  margin: 4px 0 0;
+  margin: 7px 0 0;
   color: var(--text-dim);
+  line-height: 1.5;
 }
 
 .session-item__badge {
   display: inline-flex;
-  margin-top: 10px;
-  padding: 4px 10px;
-  border-radius: var(--radius);
-  font-size: 10px;
+  margin-top: 12px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.18em;
 }
@@ -250,15 +296,96 @@
 .session-item__invite {
   display: flex;
   flex-direction: column;
+  gap: 12px;
+  padding-top: 18px;
+  border-top: 1px solid var(--ui-line);
+}
+
+.session-item__management {
+  display: grid;
+  gap: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--ui-line);
+}
+
+.session-item__players {
+  display: flex;
+  flex-direction: column;
   gap: 10px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
+}
+
+.session-item__players h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.session-item__players h4 span {
+  display: grid;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(var(--primary-rgb), .18);
+  color: var(--primary-hover);
+  font-size: 11px;
+}
+
+.session-item__players ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.session-item__players li {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  padding: 8px 11px;
+  border: 1px solid var(--ui-line);
+  border-radius: 9px;
+  color: var(--text-dim);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.session-item__players li svg {
+  flex: 0 0 auto;
+  color: var(--primary-hover);
+}
+
+.session-item__players p {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 12px;
 }
 
 .session-item__invite-row {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
+}
+
+.session-item__invite > label {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.session-item__invite-row > button,
+.session-item__actions > button {
+  min-height: 38px;
+  border-radius: 9px;
 }
 
 .session-item__invite-row input {
@@ -270,13 +397,210 @@
 
 .session-item__invite small {
   color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
-@media (max-width: 1080px) {
-  .sessions-card,
-  .sessions-card--list {
-    grid-column: 1 / span 12;
-  }
+.sessions-nav {
+  display: flex;
+  gap: 8px;
+  padding: 6px;
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid var(--ui-line);
+  border-radius: 14px;
+  background: rgba(var(--surface-rgb), .72);
+}
+
+.sessions-nav button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.sessions-nav button:hover,
+.sessions-nav button.is-active {
+  background: rgba(var(--primary-rgb), .2);
+  color: var(--text);
+}
+
+.sessions-nav button.is-active {
+  box-shadow: inset 0 0 0 1px rgba(var(--primary-rgb), .35);
+}
+
+.sessions-nav button span {
+  display: grid;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .09);
+  font-size: 11px;
+}
+
+.sessions-page-content {
+  width: 100%;
+}
+
+.sessions-form-page {
+  width: min(680px, 100%);
+  margin: 0;
+}
+
+.sessions-form-page--compact {
+  width: min(560px, 100%);
+}
+
+.sessions-card .sessions-form > button {
+  align-self: flex-start;
+  min-height: 44px;
+  margin-top: 4px;
+  padding-inline: 22px;
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgba(var(--primary-rgb), .2);
+}
+
+.sessions-form-page .sessions-card {
+  overflow: hidden;
+  border-color: rgba(var(--primary-rgb), .28);
+  background:
+    linear-gradient(135deg, rgba(var(--primary-rgb), .07), transparent 45%),
+    var(--surface);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .25);
+}
+
+.sessions-form-page .sessions-card-header {
+  gap: 10px;
+  padding: 28px 30px 0;
+}
+
+.sessions-form-page .sessions-card-title {
+  gap: 12px;
+  font-size: 21px;
+}
+
+.sessions-form-page .sessions-card-title svg {
+  box-sizing: content-box;
+  width: 18px;
+  height: 18px;
+  padding: 9px;
+  border: 1px solid rgba(var(--primary-rgb), .28);
+  border-radius: 10px;
+  background: rgba(var(--primary-rgb), .14);
+  color: var(--primary-hover);
+}
+
+.sessions-form-page .sessions-card-header [data-slot="card-description"] {
+  padding-left: 45px;
+  line-height: 1.5;
+}
+
+.sessions-form-page .sessions-card-content {
+  padding: 24px 30px 30px;
+}
+
+.sessions-form-page .sessions-form {
+  gap: 20px;
+}
+
+.sessions-form-page .sessions-form-field {
+  gap: 9px;
+}
+
+.sessions-form-page .sessions-form-field label {
+  font-size: 13px;
+}
+
+.sessions-form-page .sessions-form-field input {
+  min-height: 46px;
+  padding-inline: 14px;
+  border-radius: 10px;
+  background: rgba(var(--surface-rgb), .45);
+}
+
+.sessions-form-page .sessions-form-field input::placeholder {
+  color: var(--text-dim);
+  opacity: .78;
+}
+
+.sessions-error,
+.sessions-success {
+  padding: 12px 16px;
+  border: 1px solid currentColor;
+  border-radius: 10px;
+  background: rgba(var(--surface-rgb), .72);
+}
+
+.session-item {
+  gap: 18px;
+  padding: 22px;
+  border-radius: 14px;
+}
+
+.session-item__header > div:first-child {
+  min-width: 0;
+}
+
+.session-item__header > div:last-child {
+  justify-content: flex-end;
+}
+
+.session-item__actions,
+.session-item__code {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.session-item__actions {
+  flex: 0 1 auto;
+}
+
+.session-item__actions > button {
+  min-height: 40px;
+  padding-inline: 14px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.session-item__invite-row > button {
+  min-height: 40px;
+  padding-inline: 15px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.session-item__invite {
+  padding-top: 18px;
+  border-color: var(--ui-line);
+}
+
+.session-item__invite-row code {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid rgba(var(--primary-rgb), .3);
+  border-radius: 8px;
+  background: rgba(var(--primary-rgb), .13);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: .22em;
 }
 
 @media (max-width: 720px) {
@@ -284,10 +608,56 @@
     padding: 14px 18px;
   }
   .sessions-content {
+    gap: 24px;
     padding: 28px 18px 48px;
+  }
+  .sessions-nav {
+    width: 100%;
+    overflow-x: auto;
+  }
+  .sessions-nav button {
+    flex: 1 0 auto;
+    padding-inline: 12px;
+  }
+  .sessions-card-header {
+    padding: 21px 20px 0;
+  }
+  .sessions-card-content {
+    padding: 18px 20px 22px;
+  }
+  .sessions-card--list .sessions-card-content {
+    padding: 14px 14px 16px;
+  }
+  .sessions-form-page .sessions-card-header {
+    padding: 22px 20px 0;
+  }
+  .sessions-form-page .sessions-card-content {
+    padding: 22px 20px 24px;
+  }
+  .sessions-form-page .sessions-card-header [data-slot="card-description"] {
+    padding-left: 0;
   }
   .session-item__header {
     flex-direction: column;
     align-items: flex-start;
+  }
+  .session-item__header > div:last-child {
+    justify-content: flex-start;
+  }
+  .session-item {
+    gap: 14px;
+    padding: 15px;
+  }
+  .session-item__actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .sessions-pagination,
+  .sessions-pagination > div {
+    flex-wrap: wrap;
+  }
+  .sessions-pagination > div {
+    width: 100%;
+    justify-content: space-between;
   }
 }
