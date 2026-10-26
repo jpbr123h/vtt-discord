@@ -5,6 +5,8 @@ import DrawingPreview from './components/DrawingPreview';
 import MesaToolbar from './components/MesaToolbar';
 import TokenModal from './components/TokenModal';
 import { isTextEditingTarget } from './utils/keyboard';
+import { prepararImagem } from './utils/imagem.js';
+import { enviarImagemParaServidor } from './services/upload.js';
 import { clarearCelula, cobrirCelula, revelarTodasAsCelulas } from './utils/nevoa.js';
 import { novoId } from './utils/id';
 import TokenGroupControls from './components/TokenGroupControls';
@@ -175,6 +177,7 @@ function MesaRPG() {
   const [nometoken, setNomeToken]=useState(null)
   const [hpInputMenu, setHpInputMenu] = useState('');
   const [urlMapa, setUrlMapa] = useState(null);
+  const [avisoMesa, setAvisoMesa] = useState(null);
   const [ferramenta, setFerramenta] = useState('selecionar');
   const [formaDesenho, setFormaDesenho] = useState('livre');
   const [anotacoes, setAnotacoes] = useState([]);
@@ -516,13 +519,30 @@ function MesaRPG() {
     setJanelaToken(false);
   };
 
-  const selecionarImagemToken = (e) => {
+  const selecionarImagemToken = async (e) => {
     const arquivo = e.target.files?.[0];
-    if (!arquivo) return;
-    const leitor = new FileReader();
-    leitor.onload = () => setImagemToken(leitor.result);
-    leitor.readAsDataURL(arquivo);
     e.target.value = '';
+    if (!arquivo) return;
+    try {
+      if (sessaoAtiva) {
+        try {
+          const url = await enviarImagemParaServidor(arquivo, { sessaoId: sessaoAtiva, tipo: 'token' });
+          setImagemToken(url);
+          return;
+        } catch (err) {
+          console.warn('Upload no servidor falhou; usando imagem embutida no token.', err);
+        }
+      }
+      const dataUrl = await prepararImagem(arquivo, {
+        ladoMaximo: 512,
+        tamanhoMaximo: 320 * 1024,
+        qualidade: 0.82,
+      });
+      setImagemToken(dataUrl);
+    } catch (err) {
+      console.error('Erro ao processar imagem do token:', err);
+      setAvisoMesa('Não foi possível processar essa imagem. Tente outro arquivo.');
+    }
   };
 
   // Exclusão de Tokens Selecionados 🗑️
@@ -977,42 +997,91 @@ function MesaRPG() {
   };
 
   // Carregar Mapa de Imagem 📂
+  const aplicarMapaCompactado = async (arquivo) => {
+    const dataUrl = await prepararImagem(arquivo, {
+      ladoMaximo: 2000,
+      tamanhoMaximo: 760 * 1024,
+      qualidade: 0.76,
+    });
+    setUrlMapa(dataUrl);
+    if (!db || !sessaoAtiva) return;
+    try {
+      await setDoc(doc(db, 'sessoes', sessaoAtiva, 'estado', 'mapa'), {
+        url: dataUrl,
+        atualizadoEm: serverTimestamp(),
+      }, { merge: true });
+    } catch (err) {
+      console.error('Erro ao salvar mapa compactado:', err);
+      throw new Error('O mapa foi aplicado só nesta tela: a imagem é grande demais para sincronizar.');
+    }
+  };
+
   const handleCarregarMapa = async (e) => {
-    const arquivo = e.target.files[0];
-    if (arquivo) {
-      if (storage && sessaoAtiva) {
-        try {
-          const arquivoRef = ref(storage, `mapas/${sessaoAtiva}/${Date.now()}-${arquivo.name}`);
-          await uploadBytes(arquivoRef, arquivo);
-          const urlDownload = await getDownloadURL(arquivoRef);
-          setUrlMapa(urlDownload);
-          if (db) {
+    const arquivo = e.target.files?.[0];
+    e.target.value = '';
+    if (!arquivo) return;
+
+    // 1) Servidor próprio: public/uploads/<sessao>/ e caminho relativo no Firestore.
+    let motivoServidor = null;
+    if (sessaoAtiva) {
+      try {
+        const urlServidor = await enviarImagemParaServidor(arquivo, { sessaoId: sessaoAtiva, tipo: 'mapa' });
+        setUrlMapa(urlServidor);
+        setAvisoMesa(null);
+        if (db) {
+          try {
+            await setDoc(doc(db, 'sessoes', sessaoAtiva, 'estado', 'mapa'), {
+              url: urlServidor,
+              atualizadoEm: serverTimestamp()
+            }, { merge: true });
+          } catch (err) {
+            console.error('Erro ao salvar caminho do mapa:', err);
+            setAvisoMesa('Mapa carregado, mas não foi possível sincronizar com os jogadores.');
+          }
+        }
+        return;
+      } catch (err) {
+        console.error('Erro ao salvar mapa no servidor:', err);
+        motivoServidor = err?.message || 'falha desconhecida';
+      }
+    }
+
+    // 2) Firebase Storage, quando o bucket estiver configurado.
+    if (storage && sessaoAtiva) {
+      try {
+        const arquivoRef = ref(storage, `mapas/${sessaoAtiva}/${Date.now()}-${arquivo.name}`);
+        await uploadBytes(arquivoRef, arquivo);
+        const urlDownload = await getDownloadURL(arquivoRef);
+        setUrlMapa(urlDownload);
+        setAvisoMesa(null);
+        if (db) {
+          try {
             await setDoc(doc(db, 'sessoes', sessaoAtiva, 'estado', 'mapa'), {
               url: urlDownload,
               atualizadoEm: serverTimestamp()
             }, { merge: true });
+          } catch (err) {
+            console.error('Erro ao salvar referência do mapa:', err);
+            setAvisoMesa('Mapa carregado, mas não foi possível sincronizar com os jogadores.');
           }
-        } catch (err) {
-          console.error('Erro ao enviar mapa:', err);
         }
-      } else {
-        const reader = new FileReader();
-        reader.onload = async () => {
-          const dataUrl = reader.result;
-          setUrlMapa(dataUrl);
-          if (db && sessaoAtiva) {
-            try {
-              await setDoc(doc(db, 'sessoes', sessaoAtiva, 'estado', 'mapa'), {
-                url: dataUrl,
-                atualizadoEm: serverTimestamp()
-              }, { merge: true });
-            } catch (err) {
-              console.error('Erro ao salvar mapa:', err);
-            }
-          }
-        };
-        reader.readAsDataURL(arquivo);
+        return;
+      } catch (err) {
+        console.error('Erro ao enviar mapa para o Storage:', err);
       }
+    }
+
+    // 3) Último recurso: imagem comprimida dentro do documento do Firestore.
+    try {
+      await aplicarMapaCompactado(arquivo);
+      setAvisoMesa(
+        motivoServidor
+          ? `Upload no servidor falhou (${motivoServidor}). O mapa foi comprimido e sincronizado pelo Firestore.`
+          : 'Servidor e Storage indisponíveis. O mapa foi comprimido e sincronizado pelo Firestore.',
+      );
+    } catch (err) {
+      console.error('Erro ao carregar mapa:', err);
+      setAvisoMesa(err?.message || 'Não foi possível carregar o mapa. Tente outra imagem.');
     }
   };
 
@@ -1099,7 +1168,13 @@ function MesaRPG() {
 
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', background: 'var(--bg)', overflow: 'hidden' }}>
-      
+      {avisoMesa && (
+        <div className="mesa-aviso" role="status">
+          <span>{avisoMesa}</span>
+          <button type="button" onClick={() => setAvisoMesa(null)} aria-label="Fechar aviso">×</button>
+        </div>
+      )}
+
       <MesaToolbar
         onPerfil={() => navigate('/perfil')}
         onSessoes={() => navigate('/sessoes')}

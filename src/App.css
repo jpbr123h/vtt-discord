@@ -276,6 +276,35 @@ html, body, #root {
 }
 .mesa-toolbar__arquivo input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
 
+/* Aviso flutuante da mesa (upload de mapa/imagem) */
+.mesa-aviso {
+  position: fixed;
+  z-index: 60;
+  bottom: 22px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 10px 12px 10px 14px;
+  border: 1px solid var(--ui-line);
+  border-left: 3px solid var(--primary-hover);
+  border-radius: var(--radius);
+  background: rgba(var(--surface-rgb), .98);
+  color: var(--text);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .45);
+  font: 12px/1.45 var(--font-body);
+  transform: translateX(-50%);
+  animation: mesa-aviso-entrada 180ms ease-out;
+}
+.mesa-aviso button { display: grid; width: 22px; height: 22px; flex: 0 0 auto; place-items: center; border: 0; border-radius: var(--radius); background: var(--surface2); color: var(--text-dim); cursor: pointer; font: 16px/1 var(--font-body); }
+.mesa-aviso button:hover { background: rgba(var(--primary-rgb), .28); color: #fff; }
+
+@keyframes mesa-aviso-entrada {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
 /* ---------------------------------------------------------------- */
 /* Menu de contexto do token                                         */
 /* ---------------------------------------------------------------- */
