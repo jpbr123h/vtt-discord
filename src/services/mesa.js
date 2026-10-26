@@ -1,4 +1,4 @@
-import { deleteDoc, doc, setDoc, writeBatch } from 'firebase/firestore';
+import { deleteDoc, doc, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../auth/firebase.js';
 
 // Camada única de persistência da mesa.
@@ -171,6 +171,35 @@ export function agendarSalvarToken(sessaoId, token, atraso = 250) {
 
 export function finalizarSalvarToken(tokenId) {
   finalizar(`token:${tokenId}`);
+}
+
+// Névoa (fog of war): documento único em sessoes/{id}/estado/fog.
+// `celulas` guarda apenas as células alteradas (chave "coluna,linha").
+// Ausente = 1 (totalmente coberta); 0 = revelada, mas ainda rastreada.
+// Grava o documento inteiro (sem merge) porque células cobertas de novo são
+// removidas do mapa — com merge o Firestore manteria as chaves antigas.
+export async function salvarNevoa(sessaoId, nevoa) {
+  if (!db || !sessaoId) return false;
+  try {
+    await setDoc(doc(db, 'sessoes', sessaoId, 'estado', 'fog'), {
+      ativo: Boolean(nevoa?.ativo),
+      celulas: nevoa?.celulas || {},
+      atualizadoEm: serverTimestamp(),
+    });
+    return true;
+  } catch (erro) {
+    registrarErro('salvar névoa', erro);
+    return false;
+  }
+}
+
+export function agendarSalvarNevoa(sessaoId, nevoa, atraso = 250) {
+  if (!sessaoId) return;
+  agendar(`nevoa:${sessaoId}`, () => salvarNevoa(sessaoId, nevoa), atraso);
+}
+
+export function finalizarSalvarNevoa(sessaoId) {
+  finalizar(`nevoa:${sessaoId}`);
 }
 
 export function agendarSalvarAnotacao(sessaoId, anotacao, atraso = 250) {

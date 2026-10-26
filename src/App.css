@@ -368,6 +368,8 @@ html, body, #root {
 .anotacao-painel .anotacao-painel__tamanho { min-height: 36px; padding: 0 5px; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; background: #202735; color: #c4cee0; font: 500 10px ui-sans-serif, system-ui, sans-serif; box-shadow: none; }
 .anotacao-painel .anotacao-painel__tamanho:hover { background: #2b3545; transform: none; }
 .anotacao-painel .anotacao-painel__tamanho--ativo { border-color: #789df0; background: #293b5c; color: white; }
+.anotacao-painel__nevoa-modos { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.anotacao-painel__nevoa-modos .anotacao-painel__tamanho { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; font-size: 11px; }
 .anotacao-painel__espaco { display: grid; gap: 7px; }
 .anotacao-painel__espaco > div { display: grid; grid-template-columns: 1fr 28px auto 28px; align-items: center; gap: 5px; }
 .anotacao-painel__espaco > div > span { color: #aebbd0; font-weight: 500; }

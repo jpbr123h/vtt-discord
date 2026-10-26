@@ -3,7 +3,7 @@ import { Circle, Group, Image as KonvaImage, Rect, Text } from 'react-konva';
 import useImage from 'use-image';
 import useAnimatedGif from '../hooks/useAnimatedGif';
 
-const TokenNode = forwardRef(function TokenNode({ token, raio, selecionado, medindo, ferramenta = 'selecionar', onSelecionar, onDuploClique, onArrasteInicio, onArraste, onArrasteFim, onMenuContexto }, ref) {
+const TokenNode = forwardRef(function TokenNode({ token, raio, selecionado, medindo, ferramenta = 'selecionar', interativo = true, onSelecionar, onDuploClique, onArrasteInicio, onArraste, onArrasteFim, onMenuContexto }, ref) {
   const [imagem] = useImage(token.imagem || '');
   const imagemGrupoRef = useRef(null);
   const circuloRef = useRef(null);
@@ -66,7 +66,8 @@ const TokenNode = forwardRef(function TokenNode({ token, raio, selecionado, medi
         fill={token.imagem ? 'rgba(0,0,0,0.001)' : token.cor}
         stroke={selecionado ? '#53a9ff' : 'white'}
         strokeWidth={selecionado ? 4 : 2}
-        draggable={!medindo}
+        draggable={!medindo && interativo}
+        listening={interativo}
         onClick={(e) => onSelecionar(e, token.id)}
         onContextMenu={(e) => { e.evt.preventDefault(); e.cancelBubble = true; onMenuContexto?.(e, token.id); }}
         onDblClick={(e) => onDuploClique(e, token.id)}

@@ -8,6 +8,7 @@ import { excluirAnotacao, salvarAnotacao, salvarToken } from '../services/mesa.j
 import MapaImagem from '../components/MapaImagem';
 import TokenNode from '../components/TokenNode';
 import GridLayer from '../components/GridLayer';
+import FogLayer from '../components/FogLayer';
 import { Button } from '../components/ui/button.jsx';
 import './playerview.css';
 
@@ -26,7 +27,9 @@ export default function PlayerView() {
   const [tokens, setTokens] = useState([]);
   const [anotacoes, setAnotacoes] = useState([]);
   const [urlMapa, setUrlMapa] = useState(null);
-  const [tamanhoPalco, setTamanhoPalco] = useState({ largura: window.innerWidth, altura: window.innerHeight });
+  const [nevoa, setNevoa] = useState({ ativo: false, celulas: {} });
+  const [tamanhoPalco, setTamanhoPalco] = useState({ largura: 0, altura: 0 });
+  const [tamanhoTela, setTamanhoTela] = useState({ largura: window.innerWidth, altura: window.innerHeight });
   const [menuNota, setMenuNota] = useState(null);
   const anotacaoRefs = useRef(new Map());
   const panRef = useRef(null);
@@ -84,10 +87,21 @@ export default function PlayerView() {
     }, (err) => {
       console.error('Erro ao ouvir anotações:', err);
     });
+    const unsubNevoa = onSnapshot(doc(db, 'sessoes', sessaoId, 'estado', 'fog'), (snap) => {
+      if (!snap.exists()) {
+        setNevoa({ ativo: false, celulas: {} });
+        return;
+      }
+      const data = snap.data();
+      setNevoa({ ativo: Boolean(data.ativo), celulas: data.celulas || {} });
+    }, (err) => {
+      console.error('Erro ao ouvir névoa:', err);
+    });
     return () => {
       unsubTokens();
       unsubMapa();
       unsubAnotacoes();
+      unsubNevoa();
     };
   }, [sessaoId]);
 
@@ -111,12 +125,30 @@ export default function PlayerView() {
 
   useEffect(() => {
     const onResize = () => {
-      setTamanhoPalco({ largura: window.innerWidth, altura: window.innerHeight - 64 });
+      setTamanhoTela({ largura: window.innerWidth, altura: window.innerHeight });
     };
     onResize();
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  // Enquadra o mapa inteiro abaixo do cabeçalho na primeira carga (e se o mapa mudar).
+  const mapaAjustadoRef = useRef(null);
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage || !urlMapa || !tamanhoPalco.largura || !tamanhoPalco.altura) return;
+    if (mapaAjustadoRef.current === urlMapa) return;
+    const larguraVisivel = Math.max(320, window.innerWidth);
+    const alturaVisivel = Math.max(240, window.innerHeight - 64);
+    const escala = Math.min(1, larguraVisivel / tamanhoPalco.largura, alturaVisivel / tamanhoPalco.altura);
+    stage.scale({ x: escala, y: escala });
+    stage.position({
+      x: (larguraVisivel - tamanhoPalco.largura * escala) / 2,
+      y: 64 + (alturaVisivel - tamanhoPalco.altura * escala) / 2,
+    });
+    stage.batchDraw();
+    mapaAjustadoRef.current = urlMapa;
+  }, [urlMapa, tamanhoPalco]);
 
   // Garante que o pan termine mesmo se o botão for solto fora do palco.
   useEffect(() => {
@@ -149,6 +181,15 @@ export default function PlayerView() {
     );
   }
 
+  // Token escondido pela névoa: fica sem interação (não dá para arrastar às cegas).
+  const tokenSobNevoa = (token) => {
+    if (!nevoa.ativo) return false;
+    const coluna = Math.floor(token.x / TAMANHO_GRID);
+    const linha = Math.floor(token.y / TAMANHO_GRID);
+    const valor = nevoa.celulas?.[`${coluna},${linha}`];
+    return valor === undefined ? true : Number(valor) > 0;
+  };
+
   return (
     <div className="playerview-page">
       <header className="playerview-header">
@@ -169,9 +210,8 @@ export default function PlayerView() {
       </header>
       <Stage
         ref={stageRef}
-        width={tamanhoPalco.largura}
-        height={tamanhoPalco.altura}
-        y={64}
+        width={tamanhoTela.largura}
+        height={tamanhoTela.altura}
         onWheel={handleWheel}
         onContextMenu={(e) => e.evt.preventDefault()}
         draggable={false}
@@ -216,11 +256,9 @@ export default function PlayerView() {
         }}
       >
         <Layer>
-          {urlMapa ? <MapaImagem url={urlMapa} onMapaCarregado={({ largura, altura }) => setTamanhoPalco((atual) => {
-            const novo = { largura: Math.max(largura, atual.largura), altura: Math.max(altura, atual.altura) };
-            if (novo.largura === atual.largura && novo.altura === atual.altura) return atual;
-            return novo;
-          })} /> : null}
+          {urlMapa ? <MapaImagem url={urlMapa} onMapaCarregado={({ largura, altura }) => setTamanhoPalco((atual) => (
+            atual.largura === largura && atual.altura === altura ? atual : { largura, altura }
+          ))} /> : null}
         </Layer>
         <GridLayer largura={tamanhoPalco.largura} altura={tamanhoPalco.altura} tamanhoCelula={TAMANHO_GRID} />
         <Layer>
@@ -302,6 +340,7 @@ export default function PlayerView() {
               raio={TAMANHO_GRID / 2 - 2}
               selecionado={false}
               medindo={false}
+              interativo={!tokenSobNevoa(tk)}
               ferramenta="selecionar"
               onSelecionar={() => {}}
               onDuploClique={() => {}}
@@ -328,6 +367,17 @@ export default function PlayerView() {
             />
           ))}
         </Layer>
+        {/* Para o jogador a névoa fica acima dos tokens: o que estiver coberto desaparece. */}
+        <FogLayer
+          largura={tamanhoPalco.largura}
+          altura={tamanhoPalco.altura}
+          ativo={nevoa.ativo}
+          celulas={nevoa.celulas}
+          tamanhoCelula={TAMANHO_GRID}
+          opacidadeMaxima={1}
+          cor="#000000"
+          opaco
+        />
       </Stage>
       {menuNota && (() => {
         const nota = anotacoes.find((a) => a.id === menuNota.id && a.tipo === 'texto');

@@ -5,10 +5,12 @@ import DrawingPreview from './components/DrawingPreview';
 import MesaToolbar from './components/MesaToolbar';
 import TokenModal from './components/TokenModal';
 import { isTextEditingTarget } from './utils/keyboard';
+import { clarearCelula, cobrirCelula, revelarTodasAsCelulas } from './utils/nevoa.js';
 import { novoId } from './utils/id';
 import TokenGroupControls from './components/TokenGroupControls';
 import TokenNode from './components/TokenNode';
 import GridLayer from './components/GridLayer';
+import FogLayer from './components/FogLayer';
 import MeasurementLayer from './components/MeasurementLayer';
 import SelectionRectangle from './components/SelectionRectangle';
 import CanvasTextEditor from './components/CanvasTextEditor';
@@ -25,15 +27,18 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from './auth/firebase.js';
 import {
   agendarSalvarAnotacao,
+  agendarSalvarNevoa,
   agendarSalvarToken,
   excluirAnotacao,
   excluirAnotacoes,
   excluirToken,
   excluirTokens,
   finalizarSalvarAnotacao,
+  finalizarSalvarNevoa,
   finalizarSalvarToken,
   salvarAnotacao,
   salvarAnotacoes,
+  salvarNevoa,
   salvarToken,
   salvarTokens,
 } from './services/mesa.js';
@@ -183,6 +188,8 @@ function MesaRPG() {
   const [tamanhoFonte, setTamanhoFonte] = useState(20);
   const [espacoTexto, setEspacoTexto] = useState({ boxWidth: 220, boxHeight: 72 });
   const [editorTexto, setEditorTexto] = useState(null);
+  const [nevoa, setNevoa] = useState({ ativo: false, celulas: {} });
+  const [modoNevoa, setModoNevoa] = useState('clarear');
   const stageRef = useRef(null);
   const tokenNodeRefs = useRef(new Map());
   const anotacaoNodeRefs = useRef(new Map());
@@ -194,6 +201,8 @@ function MesaRPG() {
   const panRef = useRef(null);
   const panMoveuRef = useRef(false);
   const tokensRef = useRef(tokens);
+  const nevoaRef = useRef(nevoa);
+  const nevoaEditandoRef = useRef(false);
   const historicoRef = useRef([]);
   const estadoHistoricoRef = useRef({ tokens, anotacoes, urlMapa });
   const estadoPendenteRef = useRef(null);
@@ -242,6 +251,10 @@ function MesaRPG() {
   }, [tokens]);
 
   useEffect(() => {
+    nevoaRef.current = nevoa;
+  }, [nevoa]);
+
+  useEffect(() => {
     if (!db || !sessaoAtiva) return;
     const unsubTokens = onSnapshot(collection(db, 'sessoes', sessaoAtiva, 'tokens'), (snap) => {
       const lista = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -257,10 +270,21 @@ function MesaRPG() {
       const lista = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       setAnotacoes(lista);
     });
+    const unsubNevoa = onSnapshot(doc(db, 'sessoes', sessaoAtiva, 'estado', 'fog'), (snap) => {
+      // Enquanto o mestre pinta a névoa, ignora snapshots antigos para não desfazer o traço.
+      if (nevoaEditandoRef.current) return;
+      if (!snap.exists()) {
+        setNevoa({ ativo: false, celulas: {} });
+        return;
+      }
+      const data = snap.data();
+      setNevoa({ ativo: Boolean(data.ativo), celulas: data.celulas || {} });
+    });
     return () => {
       unsubTokens();
       unsubMapa();
       unsubAnotacoes();
+      unsubNevoa();
     };
   }, [sessaoAtiva]);
 
@@ -405,14 +429,29 @@ function MesaRPG() {
         panRef.current = null;
         if (stageRef.current) stageRef.current.container().style.cursor = 'default';
       }
+      if (ev.button === 0 && nevoaEditandoRef.current) {
+        nevoaEditandoRef.current = false;
+        finalizarSalvarNevoa(sessaoAtiva);
+      }
+    };
+    const aoPerderFoco = () => {
+      if (!nevoaEditandoRef.current) return;
+      nevoaEditandoRef.current = false;
+      finalizarSalvarNevoa(sessaoAtiva);
     };
     window.addEventListener('mouseup', pararPan);
-    return () => window.removeEventListener('mouseup', pararPan);
-  }, []);
+    window.addEventListener('blur', aoPerderFoco);
+    return () => {
+      window.removeEventListener('mouseup', pararPan);
+      window.removeEventListener('blur', aoPerderFoco);
+    };
+  }, [sessaoAtiva]);
 
   useEffect(() => {
     if (stageRef.current) {
-      stageRef.current.container().style.cursor = ferramenta === 'texto' ? 'text' : ferramenta === 'desenhar' ? 'crosshair' : 'default';
+      stageRef.current.container().style.cursor = ferramenta === 'texto'
+        ? 'text'
+        : ferramenta === 'desenhar' || ferramenta === 'nevoa' ? 'crosshair' : 'default';
     }
   }, [ferramenta]);
 
@@ -511,6 +550,47 @@ function MesaRPG() {
     setTokensSelecionados((atuais) => atuais.filter((itemId) => itemId !== id));
     setMenuToken((atual) => (atual?.id === id ? null : atual));
     excluirToken(sessaoAtiva, id);
+  };
+
+  // Névoa (fog of war) alinhada ao grid.
+  // Clarear diminui a opacidade da célula (1 → 0,5 → 0) sem remover o dado,
+  // então "Cobrir tudo" consegue restaurar a névoa depois.
+  const aplicarNevoa = (proxima, imediato = false) => {
+    nevoaRef.current = proxima;
+    setNevoa(proxima);
+    if (imediato) salvarNevoa(sessaoAtiva, proxima);
+    else agendarSalvarNevoa(sessaoAtiva, proxima);
+  };
+
+  const pintarNevoa = (pos) => {
+    const atual = nevoaRef.current;
+    if (!atual.ativo || !pos) return;
+    if (pos.x < 0 || pos.y < 0 || pos.x >= tamanhoPalco.largura || pos.y >= tamanhoPalco.altura) return;
+    const coluna = Math.floor(pos.x / TAMANHO_GRID);
+    const linha = Math.floor(pos.y / TAMANHO_GRID);
+    const celulas = modoNevoa === 'cobrir'
+      ? cobrirCelula(atual.celulas, coluna, linha)
+      : clarearCelula(atual.celulas, coluna, linha);
+    if (celulas === atual.celulas) return;
+    aplicarNevoa({ ...atual, celulas });
+  };
+
+  const cobrirTudoNevoa = () => {
+    const proxima = { ...nevoaRef.current, ativo: true, celulas: {} };
+    aplicarNevoa(proxima, true);
+  };
+
+  const revelarTudoNevoa = () => {
+    const celulas = revelarTodasAsCelulas({
+      largura: tamanhoPalco.largura,
+      altura: tamanhoPalco.altura,
+      tamanhoCelula: TAMANHO_GRID,
+    });
+    aplicarNevoa({ ...nevoaRef.current, ativo: true, celulas }, true);
+  };
+
+  const definirNevoaAtiva = (ativo) => {
+    aplicarNevoa({ ...nevoaRef.current, ativo }, true);
   };
 
   const selecionarToken = (e, id) => {
@@ -1007,6 +1087,13 @@ function MesaRPG() {
           setEditorTexto((atualEditor) => (atualEditor?.id === id ? { ...atualEditor, ...alteracoes } : atualEditor));
         }}
         onDeselecionarAnotacao={() => setAnotacaoSelecionada(null)}
+        nevoaAtiva={nevoa.ativo}
+        nevoaClareada={Object.keys(nevoa.celulas).length}
+        modoNevoa={modoNevoa}
+        onModoNevoaChange={setModoNevoa}
+        onCobrirNevoa={cobrirTudoNevoa}
+        onRevelarNevoa={revelarTudoNevoa}
+        onDefinirNevoaAtiva={definirNevoaAtiva}
         fonteAnotacao={fonteAnotacao}
         onFonteAnotacaoChange={(fonte) => {
           setFonteAnotacao(fonte);
@@ -1045,6 +1132,11 @@ function MesaRPG() {
           if (novaFerramenta === 'texto' && anotacaoSelecionada) {
             const a = anotacoes.find((x) => x.id === anotacaoSelecionada);
             if (a && a.tipo === 'texto') setAbrirPainelAnotacao(true);
+          }
+          if (novaFerramenta === 'nevoa') {
+            setAnotacaoSelecionada(null);
+            setAnotacoesSelecionadas([]);
+            setAbrirPainelAnotacao(false);
           }
         }}
         onCorAnotacaoChange={setCorAnotacao}
@@ -1188,6 +1280,7 @@ function MesaRPG() {
         onClick={(e) => {
           if (ferramenta === 'desenhar') return;
           if (ferramenta === 'texto') return;
+          if (ferramenta === 'nevoa') return;
           // Limpa a seleção ao clicar no fundo
           if (e.target === e.target.getStage() && !medindo) {
             setMenuToken(null);
@@ -1219,6 +1312,11 @@ function MesaRPG() {
           if (e.evt.button === 0 && ferramenta === 'texto' && e.target === e.target.getStage() && !editorTexto) {
             const pos = e.target.getStage().getRelativePointerPosition();
             setEditorTexto({ id: novoId(), x: pos.x, y: pos.y, texto: '', cor: corAnotacao, fontFamily: fonteAnotacao, fontSize: tamanhoFonte, boxWidth: 200, boxHeight: 60 });
+            return;
+          }
+          if (e.evt.button === 0 && ferramenta === 'nevoa') {
+            nevoaEditandoRef.current = true;
+            pintarNevoa(e.target.getStage().getRelativePointerPosition());
             return;
           }
           // Arrastar em uma área vazia cria uma seleção retangular.
@@ -1283,6 +1381,12 @@ function MesaRPG() {
           if (ferramenta === 'desenhar') {
             e.target.getStage().container().style.cursor = 'crosshair';
           }
+          if (ferramenta === 'nevoa') {
+            e.target.getStage().container().style.cursor = 'crosshair';
+            if (e.evt.buttons === 1) {
+              pintarNevoa(e.target.getStage().getRelativePointerPosition());
+            }
+          }
           if (ferramenta === 'desenhar' && formaDesenho === 'borracha' && e.evt.buttons === 1) {
             apagarComBorracha(e.target.getStage().getRelativePointerPosition());
           }
@@ -1318,6 +1422,10 @@ function MesaRPG() {
             const stage = e.target.getStage();
             if (stage) stage.container().style.cursor = 'default';
             return;
+          }
+          if (ferramenta === 'nevoa' && e.evt.button === 0 && nevoaEditandoRef.current) {
+            nevoaEditandoRef.current = false;
+            finalizarSalvarNevoa(sessaoAtiva);
           }
           if (selecaoArea && e.evt.button === 0) finalizarSelecaoArea();
           if (e.evt.button === 2) {
@@ -1367,7 +1475,7 @@ function MesaRPG() {
         />
 
         {/* Camada de desenho e escrita */}
-        <Layer listening={ferramenta !== 'desenhar' && !medindo}>
+        <Layer listening={ferramenta !== 'desenhar' && ferramenta !== 'nevoa' && !medindo}>
           <DrawingPreview ref={desenhoPreviewRef} />
           {anotacoes.map((item) => item.tipo === 'traco' ? (
             <Line key={item.id} ref={(node) => { if (node) anotacaoNodeRefs.current.set(item.id, node); else anotacaoNodeRefs.current.delete(item.id); }}
@@ -1440,6 +1548,16 @@ function MesaRPG() {
             </Group>
           ))}
         </Layer>
+
+        {/* Camada de névoa: segue o grid e fica acima do mapa/anotações, abaixo dos tokens */}
+        <FogLayer
+          largura={tamanhoPalco.largura}
+          altura={tamanhoPalco.altura}
+          ativo={nevoa.ativo}
+          celulas={nevoa.celulas}
+          tamanhoCelula={TAMANHO_GRID}
+          opacidadeMaxima={0.6}
+        />
 
         {/* Camada 3: Tokens 🪙 */}
         <Layer>

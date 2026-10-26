@@ -1,4 +1,4 @@
-import { Map, Plus, Ruler, Trash2, Pencil, Type, MousePointer2, Eraser, X, Settings, Minus, Circle, Square, RectangleHorizontal, Triangle, Star, UserRound } from 'lucide-react';
+import { Map, Plus, Ruler, Trash2, Pencil, Type, MousePointer2, Eraser, X, Settings, Minus, Circle, Square, RectangleHorizontal, Triangle, Star, UserRound, CloudFog, Eye } from 'lucide-react';
 
 export default function MesaToolbar({
   medindo, quantidadeSelecionada, onNovoToken, onCarregarMapa, onAlternarMedicao, onExcluirSelecionados,
@@ -9,8 +9,9 @@ export default function MesaToolbar({
   fonteAnotacao = 'Arial, sans-serif', onFonteAnotacaoChange,
   tamanhoFonte = 20, onTamanhoFonteChange, espacoTexto = { boxWidth: 220, boxHeight: 72 }, onEspacoTextoChange,
   quantidadeAnotacoesSelecionadas = 0, mostrarOpcoesAnotacao = false, onJanelaManager, managerAberto = false, onPerfil,
+  nevoaAtiva = false, nevoaClareada = 0, modoNevoa = 'clarear', onModoNevoaChange, onCobrirNevoa, onRevelarNevoa, onDefinirNevoaAtiva,
 }) {
-  const painelAberto = ferramenta === 'desenhar' || ferramenta === 'texto' ||
+  const painelAberto = ferramenta === 'desenhar' || ferramenta === 'texto' || ferramenta === 'nevoa' ||
     (Boolean(anotacaoSelecionada) && mostrarOpcoesAnotacao && quantidadeAnotacoesSelecionadas === 1 && quantidadeSelecionada === 0);
   const alterarAnotacao = (alteracoes) => {
     if (anotacaoSelecionada) onAnotacaoChange?.(anotacaoSelecionada.id, alteracoes);
@@ -31,6 +32,10 @@ export default function MesaToolbar({
     { id: 'estrela', nome: 'Estrela', Icone: Star },
     { id: 'borracha', nome: 'Borracha', Icone: Eraser },
   ];
+  const opcoesNevoa = [
+    { id: 'clarear', nome: 'Clarear', Icone: Eye },
+    { id: 'cobrir', nome: 'Cobrir', Icone: CloudFog },
+  ];
 
   return (
     <div className="mesa-toolbox">
@@ -44,6 +49,9 @@ export default function MesaToolbar({
         </button>
         <button className="mesa-toolbar__icone" onClick={() => onFerramentaChange?.('texto')} title="Adicionar texto" aria-label="Adicionar texto" aria-pressed={ferramenta === 'texto'}>
           <Type size={18} />
+        </button>
+        <button className={`mesa-toolbar__icone ${ferramenta === 'nevoa' ? 'mesa-toolbar__icone--ativa' : ''}`} onClick={() => onFerramentaChange?.('nevoa')} title="Névoa (fog)" aria-label="Névoa" aria-pressed={ferramenta === 'nevoa'}>
+          <CloudFog size={18} />
         </button>
         <label className="mesa-toolbar__icone mesa-toolbar__arquivo" title="Carregar mapa" aria-label="Carregar mapa">
           <Map size={18} /><input type="file" accept="image/*" onChange={onCarregarMapa} />
@@ -74,11 +82,11 @@ export default function MesaToolbar({
       )}
 
       {painelAberto && (
-        <section className="anotacao-painel" aria-label="Opções de Draw">
+        <section className="anotacao-painel" aria-label="Opções da ferramenta">
           <header className="anotacao-painel__cabecalho">
             <div>
-              <strong>{anotacaoSelecionada ? (anotacaoSelecionada.tipo === 'texto' ? 'Editar texto' : 'Editar desenho') : ferramenta === 'texto' ? 'Adicionar texto' : 'Draw'}</strong>
-              <span>{anotacaoSelecionada ? 'Personalize o item selecionado' : ferramenta === 'texto' ? 'Digite e clique no mapa' : formaDesenho === 'borracha' ? 'Clique ou arraste sobre desenhos e textos para apagar' : 'Escolha o formato e arraste no mapa'}</span>
+              <strong>{anotacaoSelecionada ? (anotacaoSelecionada.tipo === 'texto' ? 'Editar texto' : 'Editar desenho') : ferramenta === 'texto' ? 'Adicionar texto' : ferramenta === 'nevoa' ? 'Névoa' : 'Draw'}</strong>
+              <span>{anotacaoSelecionada ? 'Personalize o item selecionado' : ferramenta === 'texto' ? 'Digite e clique no mapa' : ferramenta === 'nevoa' ? 'Clique ou arraste para clarear o mapa' : formaDesenho === 'borracha' ? 'Clique ou arraste sobre desenhos e textos para apagar' : 'Escolha o formato e arraste no mapa'}</span>
             </div>
             {anotacaoSelecionada && <button className="anotacao-painel__fechar" onClick={onDeselecionarAnotacao} title="Fechar opções"><X size={16} /></button>}
           </header>
@@ -143,7 +151,7 @@ export default function MesaToolbar({
             </>
           )}
 
-          {!(ferramenta === 'desenhar' && formaDesenho === 'borracha' && !anotacaoSelecionada) && (
+          {ferramenta !== 'nevoa' && !(ferramenta === 'desenhar' && formaDesenho === 'borracha' && !anotacaoSelecionada) && (
             <label className="anotacao-painel__campo anotacao-painel__cor">
               <span>Cor</span>
               <input type="color" value={anotacaoSelecionada?.cor ?? corAnotacao}
@@ -165,6 +173,49 @@ export default function MesaToolbar({
                 ))}
               </div>
             </div>
+          )}
+
+          {ferramenta === 'nevoa' && !anotacaoSelecionada && (
+            <>
+              <div className="anotacao-painel__campo">
+                <span>Pincel</span>
+                <div className="anotacao-painel__nevoa-modos" role="group" aria-label="Modo do pincel de névoa">
+                  {opcoesNevoa.map(({ id, nome, Icone }) => (
+                    <button key={id} type="button"
+                      className={modoNevoa === id ? 'anotacao-painel__tamanho anotacao-painel__tamanho--ativo' : 'anotacao-painel__tamanho'}
+                      aria-pressed={modoNevoa === id}
+                      onClick={() => onModoNevoaChange?.(id)}>
+                      <Icone size={14} /> {nome}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <p className="anotacao-painel__dica">
+                {nevoaAtiva
+                  ? modoNevoa === 'cobrir'
+                    ? 'Clique ou arraste para colocar névoa de volta (revelada → 50% → coberta).'
+                    : 'Clique ou arraste para clarear as células do grid (coberta → 50% → revelada).'
+                  : nevoaClareada > 0
+                    ? 'A névoa está desativada, mas o desenho foi mantido.'
+                    : 'A névoa ainda não está ativa. Use "Cobrir mapa inteiro" para começar.'}
+              </p>
+              <button type="button" className="anotacao-painel__limpar" onClick={onCobrirNevoa}>
+                <CloudFog size={16} /> Cobrir mapa inteiro
+              </button>
+              <button type="button" className="anotacao-painel__limpar" onClick={onRevelarNevoa}>
+                <Eye size={16} /> Revelar mapa inteiro
+              </button>
+              {!nevoaAtiva && nevoaClareada > 0 && (
+                <button type="button" className="anotacao-painel__limpar" onClick={() => onDefinirNevoaAtiva?.(true)}>
+                  <CloudFog size={16} /> Reativar névoa salva
+                </button>
+              )}
+              {nevoaAtiva && (
+                <button type="button" className="anotacao-painel__apagar" onClick={() => onDefinirNevoaAtiva?.(false)}>
+                  Desativar névoa (mantém o desenho)
+                </button>
+              )}
+            </>
           )}
 
           {anotacaoSelecionada ? (
