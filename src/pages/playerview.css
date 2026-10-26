@@ -1,8 +1,9 @@
 .playerview-page {
   width: 100vw;
   height: 100vh;
-  background: #0b1020;
-  color: #f7f9ff;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
   overflow: hidden;
 }
 
@@ -30,8 +31,8 @@
   justify-content: space-between;
   gap: 16px;
   padding: 0 24px;
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.98) 0%, rgba(11, 16, 32, 0.9) 100%);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+  background: linear-gradient(180deg, rgba(var(--surface-rgb), .98) 0%, rgba(var(--bg-rgb), .92) 100%);
+  border-bottom: 1px solid var(--ui-line);
   backdrop-filter: blur(12px);
   z-index: 10;
 }
@@ -42,13 +43,14 @@
   gap: 8px;
   border: none;
   background: transparent;
-  color: rgba(226, 232, 255, 0.8);
-  font-size: 14px;
+  color: var(--text-dim);
+  font-size: 13px;
   cursor: pointer;
+  transition: color 140ms ease;
 }
 
 .playerview-back:hover {
-  color: #fff;
+  color: var(--primary-hover);
 }
 
 .playerview-title {
@@ -63,17 +65,20 @@
 }
 
 .playerview-title strong {
-  font-size: 16px;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
 }
 
 .playerview-title span {
   font-size: 12px;
-  color: rgba(148, 163, 184, 0.9);
+  color: var(--text-dim);
 }
 
 .playerview-meta {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: rgba(203, 213, 225, 0.8);
+  color: var(--text-dim);
 }

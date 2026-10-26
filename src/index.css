@@ -3,6 +3,60 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * Tokens de design — ESTILO.md (Grimório de Thanato)
+ * Fundo azul quase preto, superfícies azul marinho, texto claro e destaque
+ * configurável. Vermelho é o tema padrão; azul e roxo ficam disponíveis via
+ * data-theme no <html>.
+ */
+:root {
+  --bg: #0a0e1a;
+  --surface: #141d30;
+  --surface2: #1a2740;
+  --text: #eaeaea;
+  --text-dim: #a4b0c7;
+  --border: #2a2a4a;
+  --ui-line: #30415e;
+  --success: #4ade80;
+  --danger: #ef4444;
+
+  --primary: #b02b3f;
+  --primary-hover: #f05268;
+  --accent: #5d1a27;
+
+  --bg-rgb: 10, 14, 26;
+  --surface-rgb: 20, 29, 48;
+  --surface2-rgb: 26, 39, 64;
+  --ui-line-rgb: 48, 65, 94;
+  --primary-rgb: 176, 43, 63;
+  --primary-hover-rgb: 240, 82, 104;
+  --accent-rgb: 93, 26, 39;
+
+  --font-display: "Alegreya", Georgia, "Times New Roman", serif;
+  --font-body: "Segoe UI", Roboto, Arial, sans-serif;
+
+  --radius: 4px;
+  --radius-panel: 12px;
+}
+
+:root[data-theme="azul"] {
+  --primary: #2b6cb0;
+  --primary-hover: #4299e1;
+  --accent: #1a365d;
+  --primary-rgb: 43, 108, 176;
+  --primary-hover-rgb: 66, 153, 225;
+  --accent-rgb: 26, 54, 93;
+}
+
+:root[data-theme="roxo"] {
+  --primary: #7c3aed;
+  --primary-hover: #a78bfa;
+  --accent: #4c1d95;
+  --primary-rgb: 124, 58, 237;
+  --primary-hover-rgb: 167, 139, 250;
+  --accent-rgb: 76, 29, 149;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -25,28 +79,29 @@
 }
 
 :root {
-  --background: #111318;
-  --foreground: #f0eee9;
-  --card: #191b21;
-  --card-foreground: #f0eee9;
-  --popover: #191b21;
-  --popover-foreground: #f0eee9;
-  --primary: #c7a66b;
-  --primary-foreground: #17140f;
-  --secondary: #282a30;
-  --secondary-foreground: #f0eee9;
-  --muted: #26282e;
-  --muted-foreground: #9c9ba0;
-  --accent: #2b2d33;
-  --accent-foreground: #f0eee9;
-  --destructive: #d36d69;
-  --border: #34363d;
-  --input: #34363d;
-  --ring: #c7a66b;
+  --background: var(--bg);
+  --foreground: var(--text);
+  --card: var(--surface);
+  --card-foreground: var(--text);
+  --popover: var(--surface);
+  --popover-foreground: var(--text);
+  --primary-foreground: #ffffff;
+  --secondary: var(--surface2);
+  --secondary-foreground: var(--text);
+  --muted: var(--surface2);
+  --muted-foreground: var(--text-dim);
+  --accent-foreground: var(--text);
+  --destructive: var(--danger);
+  --input: var(--ui-line);
+  --ring: var(--primary-hover);
 }
 
 * {
   box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
 }
 
 html, body {
@@ -55,8 +110,17 @@ html, body {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background-color: #111318;
-  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: rgba(var(--primary-hover-rgb), .32);
+  color: #fff;
 }
 
 #root {

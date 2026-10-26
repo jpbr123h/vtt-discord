@@ -372,7 +372,7 @@ export default function SessionsPage() {
                             </Button>
                             {convites[s.id] && (
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                <code style={{ padding: '6px 10px', borderRadius: 8, background: 'rgba(59,130,246,0.25)', letterSpacing: '0.3em' }}>{convites[s.id]}</code>
+                                <code style={{ padding: '6px 10px', borderRadius: 4, background: 'rgba(var(--primary-rgb), 0.25)', letterSpacing: '0.3em' }}>{convites[s.id]}</code>
                                 <Button size="sm" variant="outline" onClick={() => copiarCodigo(convites[s.id])}>
                                   {copiado === convites[s.id] ? <Check size={16} /> : <Copy size={16} />} {copiado === convites[s.id] ? 'Copiado' : 'Copiar'}
                                 </Button>

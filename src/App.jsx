@@ -536,12 +536,17 @@ function MesaRPG() {
 
   // Ajustes do painel de status: sempre persistem junto com o estado local.
   const alterarVidaToken = (id, delta) => {
-    const token = tokens.find((item) => item.id === id);
+    const token = tokensRef.current.find((item) => item.id === id);
     if (!token) return;
-    const maximo = Number(token.vidamax) || Number(token.vida) || 0;
-    const vida = Math.max(0, Math.min(maximo, Number(token.vida || 0) + delta));
-    const atualizado = { ...token, vida };
-    setTokens((atuais) => atuais.map((item) => (item.id === id ? atualizado : item)));
+    const vidaAtual = Number(token.vida) || 0;
+    // Se o token antigo não tinha vida máxima salva, fixa o máximo atual antes de alterar.
+    const maximo = Number(token.vidamax) || Math.max(0, vidaAtual) || 0;
+    // Sem limites: a vida atual pode ficar negativa ou passar do máximo (buff temporário).
+    const vida = vidaAtual + delta;
+    const atualizado = { ...token, vida, vidamax: maximo };
+    const proximos = tokensRef.current.map((item) => (item.id === id ? atualizado : item));
+    tokensRef.current = proximos;
+    setTokens(proximos);
     salvarToken(sessaoAtiva, atualizado);
   };
 
@@ -615,11 +620,41 @@ function MesaRPG() {
     if (!e.evt.shiftKey) setTokensSelecionados([]);
   };
 
+  // Seleciona tokens direto pelo painel de status (o painel permanece aberto).
+  const selecionarTokenPeloPainel = (id, adicionar) => {
+    setFerramenta('selecionar');
+    setMedindo(false);
+    setAnotacaoSelecionada(null);
+    setAnotacoesSelecionadas([]);
+    setAbrirPainelAnotacao(false);
+    setTokensSelecionados((atuais) => {
+      if (!adicionar) return [id];
+      return atuais.includes(id) ? atuais.filter((item) => item !== id) : [...atuais, id];
+    });
+
+    // Se o token estiver fora da área visível, centraliza o palco nele.
+    const token = tokensRef.current.find((item) => item.id === id);
+    const stage = stageRef.current;
+    if (token && stage) {
+      const escala = stage.scaleX() || 1;
+      const telaX = token.x * escala + stage.x();
+      const telaY = token.y * escala + stage.y();
+      const margem = 90;
+      if (telaX < margem || telaX > window.innerWidth - margem || telaY < margem || telaY > window.innerHeight - margem) {
+        stage.position({
+          x: window.innerWidth / 2 - token.x * escala,
+          y: window.innerHeight / 2 - token.y * escala,
+        });
+        stage.batchDraw();
+      }
+    }
+  };
+
   useEffect(() => {
     const tratarTeclas = (e) => {
       if (e.key !== 'Delete' && e.key !== 'Backspace') return;
       if (isTextEditingTarget(e.target)) return;
-      if (janelaToken || janelaManager || menuToken || tokensSelecionados.length === 0) return;
+      if (janelaToken || menuToken || tokensSelecionados.length === 0) return;
 
       e.preventDefault();
       const idsSelecionados = new Set(tokensSelecionados);
@@ -629,7 +664,7 @@ function MesaRPG() {
     };
     window.addEventListener('keydown', tratarTeclas);
     return () => window.removeEventListener('keydown', tratarTeclas);
-  }, [tokensSelecionados, janelaToken, janelaManager, menuToken, sessaoAtiva]);
+  }, [tokensSelecionados, janelaToken, menuToken, sessaoAtiva]);
 
   // Movimentação Fluida (Solo e em Grupo) 🚚
   const handleDragStart = (e, idLider) => {
@@ -1063,7 +1098,7 @@ function MesaRPG() {
   };
 
   return (
-    <div style={{ position: 'relative', width: '100vw', height: '100vh', background: '#1a1a1a', overflow: 'hidden' }}>
+    <div style={{ position: 'relative', width: '100vw', height: '100vh', background: 'var(--bg)', overflow: 'hidden' }}>
       
       <MesaToolbar
         onPerfil={() => navigate('/perfil')}
@@ -1158,6 +1193,8 @@ function MesaRPG() {
           isOpen={janelaManager}
           onClose={() => setJanelaManager(false)}
           tokens={tokens}
+          selecionados={tokensSelecionados}
+          onSelecionarToken={selecionarTokenPeloPainel}
           onAlterarVida={alterarVidaToken}
           onExcluirToken={removerToken}
         />
@@ -1218,6 +1255,7 @@ function MesaRPG() {
                 <input
                   className="token-contextual__vida-input"
                   aria-label="Vida atual do token"
+                  title="Use +N para curar/buff, -N para ferir, =N para definir e =-N para definir negativo"
                   value={hpInputMenu}
                   placeholder={String(token.vida ?? 0)}
                   onChange={(e) => setHpInputMenu(e.target.value)}
@@ -1225,20 +1263,23 @@ function MesaRPG() {
                     if (e.key === 'Enter') {
                       e.preventDefault();
                       const atual = Number(token.vida) || 0;
-                      const maximo = Number(token.vidamax) || atual;
+                      const maximo = Number(token.vidamax) || Math.max(0, atual) || 0;
                       const txt = hpInputMenu.trim();
                       if (txt === '') { setHpInputMenu(''); return; }
                       let novaVida;
-                      let novoMaximo = maximo;
                       if (txt.startsWith('+')) {
-                        novaVida = Math.min(maximo, atual + (Number(txt.slice(1)) || 0));
+                        novaVida = atual + (Number(txt.slice(1)) || 0);
                       } else if (txt.startsWith('-')) {
-                        novaVida = Math.max(0, atual - (Number(txt.slice(1)) || 0));
+                        novaVida = atual - (Number(txt.slice(1)) || 0);
+                      } else if (txt.startsWith('=')) {
+                        // "=" define um valor absoluto, inclusive negativo: "=-7".
+                        novaVida = Number(txt.slice(1)) || 0;
                       } else {
-                        novaVida = Math.max(0, Number(txt) || 0);
-                        novoMaximo = Math.max(maximo, novaVida);
+                        novaVida = Number(txt) || 0;
                       }
-                      atualizarToken({ vida: novaVida, vidamax: novoMaximo });
+                      // Vida atual livre: pode ficar negativa ou acima do máximo (buff),
+                      // sem nunca alterar a vida máxima.
+                      atualizarToken({ vida: novaVida, vidamax: maximo });
                       setHpInputMenu('');
                       fechar();
                     }
