@@ -225,6 +225,8 @@ export default function SessionsPage() {
         email: user.email,
         nome: user.displayName || '',
         papel: 'jogador',
+        podeVerMapa: true,
+        podeAnotar: false,
         podeMover: false,
         podeAdicionar: false,
         adicionadoEm: serverTimestamp(),

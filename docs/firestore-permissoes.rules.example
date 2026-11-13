@@ -1,0 +1,59 @@
+// Integrar dentro de match /databases/{database}/documents das regras existentes.
+// Estes trechos substituem as autorizações das rotas abaixo, não as demais regras.
+function mesaMestre(sessaoId) {
+  return request.auth != null &&
+    get(/databases/$(database)/documents/sessoes/$(sessaoId)).data.mestreId == request.auth.uid;
+}
+function mesaMembro(sessaoId) {
+  return request.auth != null &&
+    exists(/databases/$(database)/documents/sessoesMembros/$(sessaoId + '_' + request.auth.uid));
+}
+function mesaPermissoes(sessaoId) {
+  return get(/databases/$(database)/documents/sessoesMembros/$(sessaoId + '_' + request.auth.uid)).data;
+}
+function mesaVisivel(sessaoId) {
+  return mesaMembro(sessaoId) && mesaPermissoes(sessaoId).get('podeVerMapa', true) == true;
+}
+function mesaPermite(sessaoId, campo) {
+  return mesaVisivel(sessaoId) && mesaPermissoes(sessaoId).get(campo, false) == true;
+}
+
+match /sessoesMembros/{membroId} {
+  // Integrar com as regras de leitura e criação por convite já existentes.
+  // O jogador nunca pode alterar as próprias permissões.
+  allow update: if mesaMestre(resource.data.sessaoId) &&
+    request.resource.data.diff(resource.data).affectedKeys()
+      .hasOnly(['podeVerMapa', 'podeMover', 'podeAnotar', 'podeAdicionar']) &&
+    request.resource.data.get('podeVerMapa', true) is bool &&
+    request.resource.data.get('podeMover', false) is bool &&
+    request.resource.data.get('podeAnotar', false) is bool &&
+    request.resource.data.get('podeAdicionar', false) is bool;
+}
+match /sessoes/{sessaoId}/estado/{estadoId} {
+  // Inclui o documento do mapa, suas partes de imagem, a névoa e o clima.
+  allow read: if mesaMestre(sessaoId) || mesaVisivel(sessaoId);
+  allow write: if mesaMestre(sessaoId);
+}
+match /sessoes/{sessaoId}/tokens/{tokenId} {
+  allow read: if mesaMestre(sessaoId) || mesaVisivel(sessaoId);
+  allow create: if mesaMestre(sessaoId) ||
+    (mesaPermite(sessaoId, 'podeAdicionar') && request.resource.data.donoId == request.auth.uid);
+  allow update: if mesaMestre(sessaoId) ||
+    (mesaPermite(sessaoId, 'podeMover') &&
+      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['x', 'y']) &&
+      request.resource.data.x is number && request.resource.data.y is number);
+  allow delete: if mesaMestre(sessaoId);
+}
+match /sessoes/{sessaoId}/anotacoes/{anotacaoId} {
+  allow read: if mesaMestre(sessaoId) || mesaVisivel(sessaoId);
+  allow create: if mesaMestre(sessaoId) ||
+    (mesaPermite(sessaoId, 'podeAnotar') &&
+      request.resource.data.autorId == request.auth.uid &&
+      request.resource.data.tipo in ['texto', 'traco', 'imagem']);
+  allow update: if mesaMestre(sessaoId) ||
+    (mesaPermite(sessaoId, 'podeAnotar') && resource.data.autorId == request.auth.uid &&
+      request.resource.data.autorId == resource.data.autorId &&
+      request.resource.data.tipo == resource.data.tipo);
+  allow delete: if mesaMestre(sessaoId) ||
+    (mesaPermite(sessaoId, 'podeAnotar') && resource.data.autorId == request.auth.uid);
+}

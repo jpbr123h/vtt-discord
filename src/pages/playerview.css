@@ -113,3 +113,23 @@
   color: var(--text);
   font-size: 12px;
 }
+
+.playerview-bloqueado { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 84px 24px 24px; text-align: center; }
+.playerview-bloqueado svg, .playerview-bloqueado p { color: var(--text-dim); }
+.playerview-bloqueado h2 { font: 600 24px var(--font-display); }
+.playerview-bloqueado p { font-size: 13px; line-height: 1.6; }
+.playerview-anotacoes { position: fixed; top: 76px; left: 12px; z-index: 12; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; max-width: calc(100vw - 24px); padding: 8px; border: 1px solid var(--ui-line); border-radius: var(--radius-panel); background: rgba(var(--surface-rgb), .97); box-shadow: 0 8px 24px #0005; }
+.playerview-anotacoes button { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; padding: 8px 10px; border: 1px solid var(--ui-line); border-radius: var(--radius); background: var(--surface2); color: var(--text-dim); font: 500 12px var(--font-body); cursor: pointer; }
+.playerview-anotacoes button:hover, .playerview-anotacoes button[aria-pressed="true"] { border-color: var(--primary-hover); color: var(--text); background: rgba(var(--primary-rgb), .22); }
+.playerview-anotacoes button:focus-visible { outline: 2px solid var(--primary-hover); outline-offset: 2px; }
+.playerview-anotacoes label { display: flex; align-items: center; gap: 6px; color: var(--text-dim); font-size: 11px; }
+.playerview-anotacoes input { width: 30px; height: 30px; border: 0; padding: 0; background: transparent; cursor: pointer; }
+.playerview-anotacoes select { min-height: 34px; padding: 4px; border: 1px solid var(--ui-line); border-radius: var(--radius); background: var(--surface2); color: var(--text); }
+@media (max-width: 600px) {
+  .playerview-header { height: auto; min-height: 64px; flex-wrap: wrap; padding: 10px 12px; gap: 8px; }
+  .playerview-title strong { font-size: 14px; }
+  .playerview-meta { margin-left: auto; font-size: 11px; }
+  .playerview-anotacoes { top: 114px; }
+  .playerview-anotacoes button span { display: none; }
+  .playerview-placement-hint { top: 114px; max-width: calc(100vw - 24px); }
+}

@@ -27,3 +27,8 @@ public/uploads/*
 *.njsproj
 *.sln
 *.sw?
+
+# Evidências locais de testes
+playwright-report/
+test-results/
+coverage/

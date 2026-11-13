@@ -3,6 +3,7 @@ import { Circle, Rect, Text } from 'react-konva';
 export default function TokenGroupControls({
   limites,
   visivel,
+  mostrarEspelhamento = true,
   onArrasteMolduraInicio,
   onArrasteMoldura,
   onArrasteMolduraFim,
@@ -49,33 +50,37 @@ export default function TokenGroupControls({
           strokeWidth={2}
           draggable
           onMouseDown={(e) => { e.cancelBubble = true; }}
+          onMouseEnter={(e) => { e.target.getStage().container().style.cursor = canto === 'nw' || canto === 'se' ? 'nwse-resize' : 'nesw-resize'; }}
+          onMouseLeave={(e) => { e.target.getStage().container().style.cursor = 'default'; }}
           onDragStart={() => onRedimensionarInicio(canto)}
           onDragMove={onRedimensionar}
           onDragEnd={onRedimensionarFim}
         />
       ))}
-      <Rect
-        x={meioX - 28}
-        y={limites.topo - 28}
-        width={24}
-        height={20}
-        fill="#333"
-        cornerRadius={4}
-        onClick={(e) => { e.cancelBubble = true; onEspelharHorizontal(); }}
-        onMouseDown={(e) => { e.cancelBubble = true; }}
-      />
-      <Text x={meioX - 25} y={limites.topo - 26} text="↔" fontSize={16} fill="white" listening={false} />
-      <Rect
-        x={meioX + 4}
-        y={limites.topo - 28}
-        width={24}
-        height={20}
-        fill="#333"
-        cornerRadius={4}
-        onClick={(e) => { e.cancelBubble = true; onEspelharVertical(); }}
-        onMouseDown={(e) => { e.cancelBubble = true; }}
-      />
-      <Text x={meioX + 7} y={limites.topo - 26} text="↕" fontSize={16} fill="white" listening={false} />
+      {mostrarEspelhamento && <>
+        <Rect
+          x={meioX - 28}
+          y={limites.topo - 28}
+          width={24}
+          height={20}
+          fill="#333"
+          cornerRadius={4}
+          onClick={(e) => { e.cancelBubble = true; onEspelharHorizontal(); }}
+          onMouseDown={(e) => { e.cancelBubble = true; }}
+        />
+        <Text x={meioX - 25} y={limites.topo - 26} text="↔" fontSize={16} fill="white" listening={false} />
+        <Rect
+          x={meioX + 4}
+          y={limites.topo - 28}
+          width={24}
+          height={20}
+          fill="#333"
+          cornerRadius={4}
+          onClick={(e) => { e.cancelBubble = true; onEspelharVertical(); }}
+          onMouseDown={(e) => { e.cancelBubble = true; }}
+        />
+        <Text x={meioX + 7} y={limites.topo - 26} text="↕" fontSize={16} fill="white" listening={false} />
+      </>}
     </>
   );
 }

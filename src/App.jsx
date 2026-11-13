@@ -1,11 +1,19 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Stage, Layer, Line, Text, Rect, Group, Ellipse } from 'react-konva';
 import MapaImagem from './components/MapaImagem';
+import WeatherLayer from './components/WeatherLayer';
+import WeatherToolbar from './components/WeatherToolbar';
+import useMovimentosRealtime from './hooks/useMovimentosRealtime';
+import useClima from './hooks/useClima';
+import { obterAreaClima, removerAreasClimaCobertas } from './utils/clima.js';
+import ImageAnnotation from './components/ImageAnnotation';
+import useColarNoMapa from './hooks/useColarNoMapa';
 import DrawingPreview from './components/DrawingPreview';
 import MesaToolbar from './components/MesaToolbar';
 import TokenModal from './components/TokenModal';
 import { isTextEditingTarget } from './utils/keyboard';
 import { clarearCelula, cobrirCelula, revelarTodasAsCelulas } from './utils/nevoa.js';
+import { OPCOES_PERMISSAO, obterPermissoes } from './utils/permissoes.js';
 import { novoId } from './utils/id';
 import TokenGroupControls from './components/TokenGroupControls';
 import TokenNode from './components/TokenNode';
@@ -17,7 +25,7 @@ import CanvasTextEditor from './components/CanvasTextEditor';
 import PainelManager from './components/manager';
 import './App.css';
 import { Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
-import { Users, X, Move, UserRoundPlus } from 'lucide-react';
+import { Users, X, Move, UserRoundPlus, Eye, Pencil, Settings } from 'lucide-react';
 import { AuthProvider, useAuth } from './auth/AuthContext.jsx';
 import AuthPage from './pages/AuthPage.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
@@ -37,6 +45,7 @@ import {
   finalizarSalvarAnotacao,
   finalizarSalvarNevoa,
   finalizarSalvarToken,
+  salvarClima,
   salvarAnotacao,
   salvarAnotacoes,
   salvarNevoa,
@@ -49,6 +58,21 @@ function ProtectedRoute({ children }) {
   if (!configured) return <Navigate to="/login" replace />;
   if (loading) return <div className="auth-loading">Carregando...</div>;
   return user ? children : <Navigate to="/login" replace />;
+}
+
+function MestreRoute({ children }) {
+  const { sessaoId } = useParams();
+  const { user } = useAuth();
+  const [acesso, setAcesso] = useState(null);
+  useEffect(() => {
+    if (!sessaoId || !db || !user?.uid) return;
+    return onSnapshot(doc(db, 'sessoes', sessaoId), (snap) => {
+      setAcesso({ sessaoId, mestre: snap.exists() && snap.data().mestreId === user.uid });
+    }, () => setAcesso({ sessaoId, mestre: false }));
+  }, [sessaoId, user?.uid]);
+  if (!sessaoId) return children;
+  if (!acesso || acesso.sessaoId !== sessaoId) return <div className="auth-loading">Verificando acesso à mesa...</div>;
+  return acesso.mestre ? children : <Navigate to={`/jogador/${sessaoId}`} replace />;
 }
 
 function EntrarSessao() {
@@ -81,6 +105,8 @@ function EntrarSessao() {
           usuarioId: user.uid,
           email: user.email,
           papel: 'jogador',
+          podeVerMapa: true,
+          podeAnotar: false,
           podeMover: false,
           podeAdicionar: false,
           adicionadoEm: serverTimestamp(),
@@ -112,8 +138,8 @@ function AppRoutes() {
     <Route path="/cadastro" element={<AuthPage mode="signup" />} />
     <Route path="/" element={<ProtectedRoute><SessionsPage /></ProtectedRoute>} />
     <Route path="/sessoes" element={<ProtectedRoute><SessionsPage /></ProtectedRoute>} />
-    <Route path="/mesa" element={<ProtectedRoute><MesaRPG /></ProtectedRoute>} />
-    <Route path="/mesa/:sessaoId" element={<ProtectedRoute><MesaRPG /></ProtectedRoute>} />
+    <Route path="/mesa" element={<ProtectedRoute><MestreRoute><MesaRPG /></MestreRoute></ProtectedRoute>} />
+    <Route path="/mesa/:sessaoId" element={<ProtectedRoute><MestreRoute><MesaRPG /></MestreRoute></ProtectedRoute>} />
     <Route path="/perfil" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
     <Route path="/entrar/:codigo" element={<ProtectedRoute><EntrarSessao /></ProtectedRoute>} />
     <Route path="/jogador/:sessaoId" element={<ProtectedRoute><PlayerView /></ProtectedRoute>} />
@@ -181,6 +207,7 @@ function MesaRPG() {
   const [erroCarregarMapa, setErroCarregarMapa] = useState(false);
   const [jogadoresMesa, setJogadoresMesa] = useState([]);
   const [jogadorPermissoes, setJogadorPermissoes] = useState(null);
+  const [salvandoPermissao, setSalvandoPermissao] = useState(false);
   const [erroPermissao, setErroPermissao] = useState('');
   const [erroUploadMapa, setErroUploadMapa] = useState('');
   const [enviandoMapa, setEnviandoMapa] = useState(false);
@@ -219,6 +246,28 @@ function MesaRPG() {
   const desfazendoRef = useRef(false);
   const [sessaoAtiva] = useState(sessaoId || null);
 
+  const { transmitir: transmitirMovimento, concluir: concluirMovimento, receber: receberMovimento, erro: erroMovimento } = useMovimentosRealtime(sessaoAtiva);
+  const { areas: areasClima, setAreas: setAreasClima, erro: erroClima, setErro: setErroClima } = useClima(sessaoAtiva);
+  const [clima, setClima] = useState('chuva');
+  const [intensidadeClima, setIntensidadeClima] = useState(2);
+  const [previaClima, setPreviaClima] = useState(null);
+  const desenhoClima = useRef(null);
+  const [salvandoClima, setSalvandoClima] = useState(false);
+
+  const gravarAreasClima = useCallback(async (areas) => {
+    areas = removerAreasClimaCobertas(areas);
+    if (areas.length > 24) {
+      setErroClima('Limite de 24 áreas. Remova uma área para criar outra.');
+      return;
+    }
+    setSalvandoClima(true);
+    setErroClima('');
+    const salvo = await salvarClima(sessaoAtiva, areas);
+    if (salvo || !sessaoAtiva) setAreasClima(areas);
+    else setErroClima('Não foi possível salvar o clima. Tente novamente.');
+    setSalvandoClima(false);
+  }, [sessaoAtiva, setAreasClima, setErroClima]);
+
   // Estados de medição (Régua) 📏
   
   const [medindo, setMedindo] = useState(false);
@@ -232,6 +281,54 @@ function MesaRPG() {
   });
   const [mapaImagemCarregado, setMapaImagemCarregado] = useState(false);
   const mapaAjustadoRef = useRef(null);
+
+  const [erroColagem, setErroColagem] = useState('');
+  const colando = useColarNoMapa({
+    stageRef, tamanhoPalco, sessaoId: sessaoAtiva, habilitado: true,
+    bloqueado: Boolean(janelaToken || janelaManager || jogadorPermissoes || editorTexto),
+    cor: corAnotacao, fontSize: tamanhoFonte, fontFamily: fonteAnotacao,
+    onErro: setErroColagem,
+    onColar: async (item, aindaPermitido) => {
+      if (sessaoAtiva && !await salvarAnotacao(sessaoAtiva, item)) throw new Error('Não foi possível salvar o item colado. Tente novamente.');
+      if (!aindaPermitido()) return;
+      setAnotacoes((atuais) => [...atuais.filter((atual) => atual.id !== item.id), item]);
+      setFerramenta('selecionar');
+      setMedindo(false);
+      setTokensSelecionados([]);
+      setAnotacoesSelecionadas([item.id]);
+      setAnotacaoSelecionada(item.id);
+      setAbrirPainelAnotacao(false);
+    },
+  });
+
+  // Soltar fora do canvas também conclui a área; Esc abandona o desenho.
+  useEffect(() => {
+    const finalizar = (evento) => {
+      const desenho = desenhoClima.current;
+      if (!desenho || evento.button !== 0) return;
+      desenhoClima.current = null;
+      setPreviaClima(null);
+      const stage = stageRef.current;
+      stage.setPointersPositions(evento);
+      const fim = stage.getRelativePointerPosition();
+      const area = fim && obterAreaClima(desenho.inicio, fim, tamanhoPalco);
+      if (area) gravarAreasClima([...areasClima, { id: novoId(), ...area, clima: desenho.clima, intensidade: desenho.intensidade }]);
+    };
+    const cancelar = (e) => {
+      if (e.type === 'blur' || e.key === 'Escape') {
+        desenhoClima.current = null;
+        setPreviaClima(null);
+      }
+    };
+    window.addEventListener('mouseup', finalizar);
+    window.addEventListener('keydown', cancelar);
+    window.addEventListener('blur', cancelar);
+    return () => {
+      window.removeEventListener('mouseup', finalizar);
+      window.removeEventListener('keydown', cancelar);
+      window.removeEventListener('blur', cancelar);
+    };
+  }, [areasClima, tamanhoPalco, gravarAreasClima]);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -285,7 +382,7 @@ function MesaRPG() {
     if (!db || !sessaoAtiva) return;
     const unsubTokens = onSnapshot(collection(db, 'sessoes', sessaoAtiva, 'tokens'), (snap) => {
       const lista = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setTokens(lista);
+      setTokens(receberMovimento('tokens', lista));
     });
     const unsubMapa = onSnapshot(doc(db, 'sessoes', sessaoAtiva, 'estado', 'mapa'), (snap) => {
       if (snap.exists()) {
@@ -311,7 +408,7 @@ function MesaRPG() {
     }, (err) => console.error('Erro ao ouvir jogadores da sessão:', err));
     const unsubAnotacoes = onSnapshot(collection(db, 'sessoes', sessaoAtiva, 'anotacoes'), (snap) => {
       const lista = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setAnotacoes(lista);
+      setAnotacoes(receberMovimento('anotacoes', lista));
     });
     const unsubNevoa = onSnapshot(doc(db, 'sessoes', sessaoAtiva, 'estado', 'fog'), (snap) => {
       // Enquanto o mestre pinta a névoa, ignora snapshots antigos para não desfazer o traço.
@@ -330,7 +427,7 @@ function MesaRPG() {
       unsubAnotacoes();
       unsubNevoa();
     };
-  }, [sessaoAtiva]);
+  }, [sessaoAtiva, receberMovimento]);
 
   useEffect(() => {
     const desfazer = (e) => {
@@ -431,6 +528,15 @@ function MesaRPG() {
     Object.entries(arraste.tokensOriginais).forEach(([id, origem]) => {
       tokenNodeRefs.current.get(id)?.moverPara(origem.x + dx, origem.y + dy);
     });
+    transmitirMovimento(
+      Object.entries(arraste.tokensOriginais).map(([id, origem]) => ({ id, x: origem.x + dx, y: origem.y + dy })),
+      anotacoes.filter((item) => arraste.origens[item.id]).map((item) => {
+        const origem = arraste.origens[item.id];
+        return item.tipo === 'traco'
+          ? { id: item.id, tipo: item.tipo, offsetX: origem.x + dx, offsetY: origem.y + dy }
+          : { id: item.id, x: origem.x + dx, y: origem.y + dy };
+      }),
+    );
   };
 
   const finalizarArrasteAnotacao = (e) => {
@@ -451,7 +557,7 @@ function MesaRPG() {
     if (anotacoesAtualizadas.length > 0) {
       const porId = new Map(anotacoesAtualizadas.map((item) => [item.id, item]));
       setAnotacoes((atuais) => atuais.map((item) => porId.get(item.id) || item));
-      salvarAnotacoes(sessaoAtiva, anotacoesAtualizadas);
+      concluirMovimento([], anotacoesAtualizadas);
     }
 
     const tokensAtualizados = [];
@@ -463,7 +569,7 @@ function MesaRPG() {
     if (tokensAtualizados.length > 0) {
       const porId = new Map(tokensAtualizados.map((token) => [token.id, token]));
       setTokens((atuais) => atuais.map((token) => porId.get(token.id) || token));
-      salvarTokens(sessaoAtiva, tokensAtualizados);
+      concluirMovimento(tokensAtualizados);
     }
   };
 
@@ -495,7 +601,7 @@ function MesaRPG() {
     if (stageRef.current) {
       stageRef.current.container().style.cursor = ferramenta === 'texto'
         ? 'text'
-        : ferramenta === 'desenhar' || ferramenta === 'nevoa' ? 'crosshair' : 'default';
+        : ferramenta === 'desenhar' || ferramenta === 'nevoa' || ferramenta === 'clima' ? 'crosshair' : 'default';
     }
   }, [ferramenta]);
 
@@ -524,16 +630,6 @@ function MesaRPG() {
       setFerramenta('selecionar');
     }
     setEditorTexto(null);
-  };
-
-  const redimensionarTexto = (id, dimensoes) => {
-    const atual = anotacoes.find((item) => item.id === id);
-    if (atual) {
-      const atualizada = { ...atual, ...dimensoes };
-      setAnotacoes((atuais) => atuais.map((item) => (item.id === id ? { ...item, ...dimensoes } : item)));
-      agendarSalvarAnotacao(sessaoAtiva, atualizada);
-    }
-    setEditorTexto((atualEditor) => (atualEditor?.id === id ? { ...atualEditor, ...dimensoes } : atualEditor));
   };
 
   // Alternar modal e Criar Tokens 🪙
@@ -751,6 +847,15 @@ function MesaRPG() {
     Object.entries(anotacoesOriginais).forEach(([id, origem]) => {
       anotacaoNodeRefs.current.get(id)?.position({ x: origem.x + deltaX, y: origem.y + deltaY });
     });
+    transmitirMovimento(
+      grupoArrastado.map((id) => ({ id, x: posicoesIniciais[id].x + deltaX, y: posicoesIniciais[id].y + deltaY })),
+      anotacoes.filter((item) => anotacoesOriginais[item.id]).map((item) => {
+        const origem = anotacoesOriginais[item.id];
+        return item.tipo === 'traco'
+          ? { id: item.id, tipo: item.tipo, offsetX: origem.x + deltaX, offsetY: origem.y + deltaY }
+          : { id: item.id, x: origem.x + deltaX, y: origem.y + deltaY };
+      }),
+    );
   };
 
   const handleDragEnd = (e, idLider) => {
@@ -787,7 +892,7 @@ function MesaRPG() {
     if (tokensAtualizados.length > 0) {
       const porId = new Map(tokensAtualizados.map((tk) => [tk.id, tk]));
       setTokens((atuais) => atuais.map((tk) => porId.get(tk.id) || tk));
-      salvarTokens(sessaoAtiva, tokensAtualizados);
+      concluirMovimento(tokensAtualizados);
     }
 
     const anotacoesOriginais = anotacoesNoArrasteToken.current || {};
@@ -802,7 +907,7 @@ function MesaRPG() {
     if (anotacoesAtualizadas.length > 0) {
       const porId = new Map(anotacoesAtualizadas.map((item) => [item.id, item]));
       setAnotacoes((atuais) => atuais.map((item) => porId.get(item.id) || item));
-      salvarAnotacoes(sessaoAtiva, anotacoesAtualizadas);
+      concluirMovimento([], anotacoesAtualizadas);
     }
 
     anotacoesNoArrasteToken.current = null;
@@ -836,7 +941,7 @@ function MesaRPG() {
         const ys = item.pontos.filter((_, i) => i % 2 === 1).map((y) => y + (item.offsetY || 0));
         const margem = item.espessura / 2;
         limites = { esquerda: Math.min(...xs) - margem, direita: Math.max(...xs) + margem, topo: Math.min(...ys) - margem, base: Math.max(...ys) + margem };
-      } else if (item.tipo === 'forma') {
+      } else if (item.tipo === 'forma' || item.tipo === 'imagem') {
         limites = { esquerda: item.x, direita: item.x + item.largura, topo: item.y, base: item.y + item.altura };
       } else {
         const largura = item.boxWidth || Math.max(48, Math.max(...item.texto.split('\n').map((linha) => linha.length)) * (item.fontSize || 20) * 0.62 + 16);
@@ -882,12 +987,13 @@ function MesaRPG() {
         const altura = item.boxHeight || item.texto.split('\n').length * (item.fontSize || 20) * 1.25 + 12;
         return { esquerda: item.x, direita: item.x + largura, topo: item.y, base: item.y + altura };
       }
-      if (item.tipo === 'forma') {
+      if (item.tipo === 'forma' || item.tipo === 'imagem') {
         return { esquerda: item.x, direita: item.x + item.largura, topo: item.y, base: item.y + item.altura };
       }
       const xs = item.pontos.filter((_, indice) => indice % 2 === 0).map((x) => x + (item.offsetX || 0));
       const ys = item.pontos.filter((_, indice) => indice % 2 === 1).map((y) => y + (item.offsetY || 0));
-      return { esquerda: Math.min(...xs), direita: Math.max(...xs), topo: Math.min(...ys), base: Math.max(...ys) };
+      const margem = item.espessura / 2;
+      return { esquerda: Math.min(...xs) - margem, direita: Math.max(...xs) + margem, topo: Math.min(...ys) - margem, base: Math.max(...ys) + margem };
     });
     return {
       esquerda: Math.min(...caixas.map((caixa) => caixa.esquerda)) - 8,
@@ -932,14 +1038,16 @@ function MesaRPG() {
   };
 
   const iniciarRedimensionamento = (canto) => {
-    if (!limitesGrupo) return;
+    if (!limitesItensSelecionados) return;
+    const limites = limitesItensSelecionados;
     const ancora = {
-      x: canto.includes('e') ? limitesGrupo.esquerda : limitesGrupo.direita,
-      y: canto.includes('s') ? limitesGrupo.topo : limitesGrupo.base,
+      x: canto.includes('e') ? limites.esquerda : limites.direita,
+      y: canto.includes('s') ? limites.topo : limites.base,
     };
     redimensionamentoGrupo.current = {
       ancora,
-      limites: { ...limitesGrupo },
+      anotacoes: anotacoesDoGrupo.map((item) => ({ ...item })),
+      limites: { ...limites },
       posicoes: Object.fromEntries(tokensDoGrupo.map((tk) => [tk.id, {
         x: tk.x, y: tk.y, escala: tk.escala || 1,
       }])),
@@ -965,6 +1073,35 @@ function MesaRPG() {
         escala: Math.max(0.25, Math.min(4, origem.escala * escala)),
       });
     });
+    const anotacoesAtualizadas = inicio.anotacoes.map((item) => {
+      const transformarX = (x) => inicio.ancora.x + (x - inicio.ancora.x) * escala;
+      const transformarY = (y) => inicio.ancora.y + (y - inicio.ancora.y) * escala;
+      if (item.tipo === 'traco') return {
+        ...item,
+        pontos: item.pontos.map((valor, indice) => indice % 2 === 0
+          ? transformarX(valor + (item.offsetX || 0))
+          : transformarY(valor + (item.offsetY || 0))),
+        offsetX: 0, offsetY: 0,
+        espessura: item.espessura * escala,
+      };
+      const posicao = { x: transformarX(item.x), y: transformarY(item.y) };
+      if (item.tipo === 'imagem') return {
+        ...item, ...posicao, largura: item.largura * escala, altura: item.altura * escala,
+      };
+      if (item.tipo === 'forma') return {
+        ...item, ...posicao, largura: item.largura * escala, altura: item.altura * escala,
+        ...(item.pontos ? { pontos: item.pontos.map((valor) => valor * escala) } : {}),
+        espessura: item.espessura * escala,
+      };
+      const fonte = item.fontSize || 20;
+      const largura = item.boxWidth || Math.max(48, Math.max(...item.texto.split('\n').map((linha) => linha.length)) * fonte * 0.62 + 16);
+      const altura = item.boxHeight || item.texto.split('\n').length * fonte * 1.25 + 12;
+      return { ...item, ...posicao, fontSize: fonte * escala,
+        boxWidth: (largura - 16) * escala + 16, boxHeight: (altura - 12) * escala + 12 };
+    });
+    const anotacoesPorId = new Map(anotacoesAtualizadas.map((item) => [item.id, item]));
+    setAnotacoes((atuais) => atuais.map((item) => anotacoesPorId.get(item.id) || item));
+    anotacoesAtualizadas.forEach((item) => agendarSalvarAnotacao(sessaoAtiva, item));
     if (atualizados.length === 0) return;
     const porId = new Map(atualizados.map((tk) => [tk.id, tk]));
     setTokens((atuais) => atuais.map((tk) => porId.get(tk.id) || tk));
@@ -972,11 +1109,23 @@ function MesaRPG() {
   };
 
   const finalizarRedimensionamento = () => {
+    redimensionamentoGrupo.current?.anotacoes.forEach((item) => finalizarSalvarAnotacao(item.id));
     redimensionamentoGrupo.current = null;
     tokensSelecionados.forEach((id) => finalizarSalvarToken(id));
   };
 
-  const iniciarArrasteMoldura = () => {
+  const iniciarArrasteMoldura = (e) => {
+    if (anotacoesDoGrupo.length) {
+      arrasteAnotacoes.current = {
+        x: e.target.x(), y: e.target.y(),
+        origens: Object.fromEntries(anotacoesDoGrupo.map((item) => [item.id, {
+          x: item.tipo === 'traco' ? (item.offsetX || 0) : item.x,
+          y: item.tipo === 'traco' ? (item.offsetY || 0) : item.y,
+        }])),
+        tokensOriginais: Object.fromEntries(tokensDoGrupo.map((tk) => [tk.id, { x: tk.x, y: tk.y }])),
+      };
+      return;
+    }
     posicoesGrupoMoldura.current = {
       posicoes: Object.fromEntries(tokensDoGrupo.map((tk) => [tk.id, { x: tk.x, y: tk.y }])),
       limites: { ...limitesGrupo },
@@ -984,6 +1133,7 @@ function MesaRPG() {
   };
 
   const moverGrupoPelaMoldura = (e) => {
+    if (arrasteAnotacoes.current) return moverAnotacaoSelecionada(e);
     if (!posicoesGrupoMoldura.current) return;
     const { posicoes, limites } = posicoesGrupoMoldura.current;
     const deltaX = e.target.x() - limites.esquerda;
@@ -991,9 +1141,11 @@ function MesaRPG() {
     Object.entries(posicoes).forEach(([id, inicio]) => {
       tokenNodeRefs.current.get(id)?.moverPara(inicio.x + deltaX, inicio.y + deltaY);
     });
+    transmitirMovimento(Object.entries(posicoes).map(([id, inicio]) => ({ id, x: inicio.x + deltaX, y: inicio.y + deltaY })));
   };
 
   const finalizarArrasteMoldura = (e) => {
+    if (arrasteAnotacoes.current) return finalizarArrasteAnotacao(e);
     if (!posicoesGrupoMoldura.current) return;
     const { posicoes, limites } = posicoesGrupoMoldura.current;
     const raio = TAMANHO_GRID / 2;
@@ -1014,7 +1166,7 @@ function MesaRPG() {
     if (atualizados.length > 0) {
       const porId = new Map(atualizados.map((tk) => [tk.id, tk]));
       setTokens((atuais) => atuais.map((tk) => porId.get(tk.id) || tk));
-      salvarTokens(sessaoAtiva, atualizados);
+      concluirMovimento(atualizados);
     }
     posicoesGrupoMoldura.current = null;
     e.target.position({ x: limites.esquerda + deltaX, y: limites.topo + deltaY });
@@ -1066,13 +1218,16 @@ function MesaRPG() {
   }, [sessaoAtiva]);
 
   const alterarPermissaoJogador = async (jogador, permissao, permitido) => {
-    if (!db || !jogador.id) return;
+    if (!db || !jogador.id || salvandoPermissao || !OPCOES_PERMISSAO.some((opcao) => opcao.chave === permissao)) return;
     setErroPermissao('');
+    setSalvandoPermissao(true);
     try {
       await updateDoc(doc(db, 'sessoesMembros', jogador.id), { [permissao]: permitido });
     } catch (err) {
       console.error('Erro ao atualizar permissão do jogador:', err);
-      setErroPermissao(`Não foi possível salvar a permissão (${err?.code || 'firestore/unknown'}).`);
+      setErroPermissao('Não foi possível salvar a permissão. Tente novamente.');
+    } finally {
+      setSalvandoPermissao(false);
     }
   };
 
@@ -1121,7 +1276,7 @@ function MesaRPG() {
         }
         return false;
       }
-      if (item.tipo === 'forma') {
+      if (item.tipo === 'forma' || item.tipo === 'imagem') {
         const largura = item.largura || 0;
         const altura = item.altura || 0;
         return pos.x >= item.x - 10 && pos.x <= item.x + largura + 10 &&
@@ -1145,6 +1300,13 @@ function MesaRPG() {
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', background: 'var(--bg)', overflow: 'hidden' }}>
 
+      {ferramenta === 'clima' && <WeatherToolbar clima={clima} intensidade={intensidadeClima}
+        onClimaChange={setClima} onIntensidadeChange={setIntensidadeClima} areas={areasClima}
+        onRemover={(id) => { if (!salvandoClima) gravarAreasClima(areasClima.filter((area) => area.id !== id)); }}
+        onFechar={() => { desenhoClima.current = null; setPreviaClima(null); setFerramenta('selecionar'); }}
+        erro={erroClima} salvando={salvandoClima} />}
+      {erroMovimento && <p className="mapa-upload-status mapa-upload-status--erro" role="alert">{erroMovimento}</p>}
+      {(colando || erroColagem) && <p className="clipboard-status" role={erroColagem ? 'alert' : 'status'}>{erroColagem || 'Colando no mapa…'}</p>}
       <MesaToolbar
         onPerfil={() => navigate('/perfil')}
         onSessoes={() => navigate('/sessoes')}
@@ -1204,6 +1366,8 @@ function MesaRPG() {
           tracoAtual.current = null;
           formaAtual.current = null;
           desenhoPreviewRef.current?.clear();
+          desenhoClima.current = null;
+          setPreviaClima(null);
           setFerramenta(novaFerramenta);
           setMedindo(false);
           setPontoInicial(null);
@@ -1213,7 +1377,7 @@ function MesaRPG() {
             const a = anotacoes.find((x) => x.id === anotacaoSelecionada);
             if (a && a.tipo === 'texto') setAbrirPainelAnotacao(true);
           }
-          if (novaFerramenta === 'nevoa') {
+          if (novaFerramenta === 'nevoa' || novaFerramenta === 'clima') {
             setAnotacaoSelecionada(null);
             setAnotacoesSelecionadas([]);
             setAbrirPainelAnotacao(false);
@@ -1240,8 +1404,9 @@ function MesaRPG() {
             <ul>{jogadoresMesa.map((jogador) => (
               <li key={jogador.id}>
                 <button className="mesa-jogadores__selecionar" type="button" onClick={() => { setErroPermissao(''); setJogadorPermissoes(jogador); }}>
-                  {jogador.nome || jogador.email || 'Jogador'}
+                  <span>{jogador.nome || jogador.email || 'Jogador'}</span><Settings size={14} />
                 </button>
+                <span className="mesa-jogadores__resumo">{obterPermissoes(jogador).podeVerMapa ? OPCOES_PERMISSAO.filter((opcao) => obterPermissoes(jogador)[opcao.chave]).map((opcao) => opcao.titulo).join(' · ') : 'Mapa bloqueado'}</span>
               </li>
             ))}</ul>
           ) : <p>Nenhum jogador entrou ainda.</p>}
@@ -1254,16 +1419,19 @@ function MesaRPG() {
               <div><span>PERMISSÕES</span><h2 id="permissoes-jogador-titulo">{jogadorPermissoes.nome || jogadorPermissoes.email || 'Jogador'}</h2></div>
               <button type="button" onClick={() => setJogadorPermissoes(null)} aria-label="Fechar"><X size={17} /></button>
             </header>
-            <label><Move size={16} /><input type="checkbox" checked={Boolean(jogadorPermissoes.podeMover)} onChange={(e) => {
-              const permitido = e.target.checked;
-              setJogadorPermissoes((atual) => ({ ...atual, podeMover: permitido }));
-              alterarPermissaoJogador(jogadorPermissoes, 'podeMover', permitido);
-            }} /> Pode mover itens no mapa</label>
-            <label><UserRoundPlus size={16} /><input type="checkbox" checked={Boolean(jogadorPermissoes.podeAdicionar)} onChange={(e) => {
-              const permitido = e.target.checked;
-              setJogadorPermissoes((atual) => ({ ...atual, podeAdicionar: permitido }));
-              alterarPermissaoJogador(jogadorPermissoes, 'podeAdicionar', permitido);
-            }} /> Pode colocar tokens no mapa</label>
+            <p className="permissoes-jogador__dica">As alterações são salvas e aplicadas em tempo real.</p>
+            {OPCOES_PERMISSAO.map(({ chave, titulo, descricao }) => {
+              const Icone = { podeVerMapa: Eye, podeMover: Move, podeAnotar: Pencil, podeAdicionar: UserRoundPlus }[chave];
+              return <label key={chave}>
+                <Icone size={18} />
+                <span><strong>{titulo}</strong><small>{descricao}</small></span>
+                <input type="checkbox" checked={chave === 'podeVerMapa' ? jogadorPermissoes.podeVerMapa !== false : jogadorPermissoes[chave] === true}
+                  disabled={salvandoPermissao}
+                  onChange={(e) => alterarPermissaoJogador(jogadorPermissoes, chave, e.target.checked)} />
+              </label>;
+            })}
+            {jogadorPermissoes.podeVerMapa === false && <p className="permissoes-jogador__dica">Com o mapa bloqueado, as outras ações ficam indisponíveis para este jogador.</p>}
+            {salvandoPermissao && <p className="permissoes-jogador__dica" role="status">Salvando permissão…</p>}
             {erroPermissao && <p className="mesa-jogadores__erro" role="alert">{erroPermissao}</p>}
           </section>
         </div>
@@ -1406,7 +1574,7 @@ function MesaRPG() {
         onClick={(e) => {
           if (ferramenta === 'desenhar') return;
           if (ferramenta === 'texto') return;
-          if (ferramenta === 'nevoa') return;
+          if (ferramenta === 'nevoa' || ferramenta === 'clima') return;
           // Limpa a seleção ao clicar no fundo
           if (e.target === e.target.getStage() && !medindo) {
             setMenuToken(null);
@@ -1433,6 +1601,13 @@ function MesaRPG() {
               };
               stage.container().style.cursor = 'grabbing';
             }
+            return;
+          }
+          if (e.evt.button === 0 && ferramenta === 'clima') {
+            if (salvandoClima) return;
+            const inicio = e.target.getStage().getRelativePointerPosition();
+            desenhoClima.current = { inicio, clima, intensidade: intensidadeClima };
+            setPreviaClima(null);
             return;
           }
           if (e.evt.button === 0 && ferramenta === 'texto' && e.target === e.target.getStage() && !editorTexto) {
@@ -1500,6 +1675,14 @@ function MesaRPG() {
                 y: panRef.current.stageY + deltaY,
               });
               stage.batchDraw();
+            }
+            return;
+          }
+          if (ferramenta === 'clima') {
+            const stage = e.target.getStage();
+            stage.container().style.cursor = 'crosshair';
+            if (desenhoClima.current) {
+              setPreviaClima(obterAreaClima(desenhoClima.current.inicio, stage.getRelativePointerPosition(), tamanhoPalco));
             }
             return;
           }
@@ -1601,17 +1784,21 @@ function MesaRPG() {
         />
 
         {/* Camada de desenho e escrita */}
-        <Layer listening={ferramenta !== 'desenhar' && ferramenta !== 'nevoa' && !medindo}>
+        <Layer listening={ferramenta !== 'desenhar' && ferramenta !== 'nevoa' && ferramenta !== 'clima' && !medindo}>
           <DrawingPreview ref={desenhoPreviewRef} />
           {anotacoes.map((item) => item.tipo === 'traco' ? (
             <Line key={item.id} ref={(node) => { if (node) anotacaoNodeRefs.current.set(item.id, node); else anotacaoNodeRefs.current.delete(item.id); }}
               points={item.pontos} stroke={item.cor} strokeWidth={item.espessura}
               x={item.offsetX || 0} y={item.offsetY || 0}
               listening={ferramenta === 'selecionar' && !medindo}
-              shadowColor={anotacoesSelecionadas.includes(item.id) ? '#53a9ff' : undefined}
-              shadowBlur={anotacoesSelecionadas.includes(item.id) ? 8 : 0}
               draggable={ferramenta === 'selecionar' && !medindo}
               lineCap="round" lineJoin="round" hitStrokeWidth={Math.max(16, item.espessura + 10)}
+              onClick={(e) => selecionarAnotacao(e, item.id)}
+              onDragStart={(e) => iniciarArrasteAnotacao(e, item)} onDragMove={moverAnotacaoSelecionada} onDragEnd={finalizarArrasteAnotacao} />
+          ) : item.tipo === 'imagem' ? (
+            <ImageAnnotation key={item.id} item={item}
+              ref={(node) => { if (node) anotacaoNodeRefs.current.set(item.id, node); else anotacaoNodeRefs.current.delete(item.id); }}
+              draggable={ferramenta === 'selecionar' && !medindo}
               onClick={(e) => selecionarAnotacao(e, item.id)}
               onDragStart={(e) => iniciarArrasteAnotacao(e, item)} onDragMove={moverAnotacaoSelecionada} onDragEnd={finalizarArrasteAnotacao} />
           ) : item.tipo === 'forma' ? (
@@ -1628,8 +1815,7 @@ function MesaRPG() {
               <Line points={item.pontos} closed={item.forma === 'triangulo' || item.forma === 'estrela'} fill="rgba(0,0,0,0)"
                   stroke={item.cor} strokeWidth={item.espessura} lineCap="round" lineJoin="round" />
               )}
-              {anotacoesSelecionadas.includes(item.id) && <Rect width={item.largura} height={item.altura}
-                stroke="#53a9ff" strokeWidth={1} dash={[5, 4]} listening={false} />}
+
             </Group>
           ) : item.id === editorTexto?.id ? null : (
             <Group key={item.id} ref={(node) => { if (node) anotacaoNodeRefs.current.set(item.id, node); else anotacaoNodeRefs.current.delete(item.id); }}
@@ -1648,32 +1834,17 @@ function MesaRPG() {
               <Rect width={item.boxWidth || Math.max(48, Math.max(...item.texto.split('\n').map((linha) => linha.length)) * (item.fontSize || 20) * 0.62 + 16)}
                 height={item.boxHeight || item.texto.split('\n').length * (item.fontSize || 20) * 1.25 + 12}
                 fill="rgba(12, 16, 24, 0)"
-                stroke={anotacoesSelecionadas.includes(item.id) ? '#53a9ff' : 'rgba(255,255,255,0.28)'}
-                strokeWidth={anotacoesSelecionadas.includes(item.id) ? 2 : 1} cornerRadius={6} />
+                stroke='rgba(255,255,255,0.28)'
+                strokeWidth={1} cornerRadius={6} />
               <Text x={8} y={6} width={item.boxWidth ? item.boxWidth - 16 : undefined} height={item.boxHeight ? item.boxHeight - 12 : undefined}
                 text={item.texto} fill={item.cor} fontSize={item.fontSize || 20} fontStyle="bold" fontFamily={item.fontFamily || 'Arial, sans-serif'} wrap="word"
                 shadowColor="black" shadowBlur={2} shadowOpacity={0.5} />
-              {anotacaoSelecionada === item.id && ferramenta === 'selecionar' && !medindo && (() => {
-                const largura = item.boxWidth || Math.max(48, Math.max(...item.texto.split('\n').map((linha) => linha.length)) * (item.fontSize || 20) * 0.62 + 16);
-                const altura = item.boxHeight || item.texto.split('\n').length * (item.fontSize || 20) * 1.25 + 12;
-                return <Rect x={largura - 12} y={altura - 12} width={12} height={12} fill="#53a9ff" stroke="white" strokeWidth={1}
-                  draggable
-                  onMouseDown={(e) => { e.cancelBubble = true; }}
-                  onDragStart={(e) => { e.cancelBubble = true; }}
-                  onDragMove={(e) => {
-                    e.cancelBubble = true;
-                    redimensionarTexto(item.id, {
-                      boxWidth: Math.max(80, Math.min(600, e.target.x() + 12)),
-                      boxHeight: Math.max(50, Math.min(500, e.target.y() + 12)),
-                    });
-                  }}
-                  onDragEnd={() => { finalizarSalvarAnotacao(item.id); }}
-                  onMouseEnter={(e) => { e.target.getStage().container().style.cursor = 'nwse-resize'; }}
-                  onMouseLeave={(e) => { e.target.getStage().container().style.cursor = 'default'; }} />;
-              })()}
+
             </Group>
           ))}
         </Layer>
+
+        <WeatherLayer areas={areasClima} />
 
         {/* Camada de névoa: segue o grid e fica acima do mapa/anotações, abaixo dos tokens */}
         <FogLayer
@@ -1686,20 +1857,9 @@ function MesaRPG() {
         />
 
         {/* Camada 3: Tokens 🪙 */}
-        <Layer>
+        <Layer listening={ferramenta !== 'clima'}>
           <SelectionRectangle area={selecaoArea} obterLimites={obterRetanguloSelecao} />
-          <TokenGroupControls
-            limites={limitesGrupo}
-            visivel={!medindo && anotacoesSelecionadas.length === 0}
-            onArrasteMolduraInicio={iniciarArrasteMoldura}
-            onArrasteMoldura={moverGrupoPelaMoldura}
-            onArrasteMolduraFim={finalizarArrasteMoldura}
-            onRedimensionarInicio={iniciarRedimensionamento}
-            onRedimensionar={moverAlcaRedimensionamento}
-            onRedimensionarFim={finalizarRedimensionamento}
-            onEspelharHorizontal={() => espelharGrupo('horizontal')}
-            onEspelharVertical={() => espelharGrupo('vertical')}
-          />
+
           {tokens.map((tk) => (
             <TokenNode
               key={tk.id}
@@ -1727,14 +1887,32 @@ function MesaRPG() {
           ))}
         </Layer>
 
-        {anotacoesSelecionadas.length > 0 && limitesItensSelecionados && ferramenta === 'selecionar' && (
-          <Layer listening={false}>
-            <Rect x={limitesItensSelecionados.esquerda} y={limitesItensSelecionados.topo}
-              width={limitesItensSelecionados.direita - limitesItensSelecionados.esquerda}
-              height={limitesItensSelecionados.base - limitesItensSelecionados.topo}
-              stroke="#53a9ff" strokeWidth={2} dash={[7, 4]} />
-          </Layer>
-        )}
+        <Layer>
+          <TokenGroupControls
+            limites={limitesItensSelecionados}
+            visivel={!medindo && ferramenta === 'selecionar' && !editorTexto}
+            onArrasteMolduraInicio={iniciarArrasteMoldura}
+            onArrasteMoldura={moverGrupoPelaMoldura}
+            onArrasteMolduraFim={finalizarArrasteMoldura}
+            onRedimensionarInicio={iniciarRedimensionamento}
+            onRedimensionar={moverAlcaRedimensionamento}
+            onRedimensionarFim={finalizarRedimensionamento}
+            mostrarEspelhamento={anotacoesSelecionadas.length === 0}
+            onEspelharHorizontal={() => espelharGrupo('horizontal')}
+            onEspelharVertical={() => espelharGrupo('vertical')}
+          />
+        </Layer>
+
+        {ferramenta === 'clima' && <Layer listening={false}>
+          {areasClima.map((area, indice) => <Group key={area.id}>
+            <Rect x={area.x} y={area.y} width={area.largura} height={area.altura}
+              stroke="#8ccfff" strokeWidth={1.5} dash={[8, 5]} />
+            <Text x={area.x + 5} y={area.y + 5} text={`${indice + 1}`} fill="white" fontSize={16}
+              shadowColor="black" shadowBlur={4} />
+          </Group>)}
+          {previaClima && <Rect x={previaClima.x} y={previaClima.y} width={previaClima.largura} height={previaClima.altura}
+            stroke="#8ccfff" strokeWidth={2} dash={[8, 5]} fill="rgba(100,180,255,0.16)" />}
+        </Layer>}
 
         {/* Camada 4: Régua de Medição 📏 */}
         <MeasurementLayer inicio={pontoInicial} atual={pontoAtual} distancia={calcularDistancia} />

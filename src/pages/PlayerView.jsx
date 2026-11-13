@@ -1,15 +1,23 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Stage, Layer, Line, Text, Rect, Group, Ellipse } from 'react-konva';
-import { ArrowLeft, Users, Eye, Plus, X } from 'lucide-react';
+import { ArrowLeft, Users, Eye, Plus, X, Pencil, Type, MousePointer2, EyeOff } from 'lucide-react';
 import { doc, getDoc, onSnapshot, collection } from 'firebase/firestore';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { db } from '../auth/firebase.js';
 import { excluirAnotacao, salvarAnotacao, salvarToken } from '../services/mesa.js';
+import { obterPermissoes, podeEditarAnotacao } from '../utils/permissoes.js';
+import ImageAnnotation from '../components/ImageAnnotation';
+import useColarNoMapa from '../hooks/useColarNoMapa';
+import DrawingPreview from '../components/DrawingPreview';
+import CanvasTextEditor from '../components/CanvasTextEditor';
 import { novoId } from '../utils/id.js';
 import MapaImagem from '../components/MapaImagem';
 import TokenNode from '../components/TokenNode';
 import GridLayer from '../components/GridLayer';
+import WeatherLayer from '../components/WeatherLayer';
+import useMovimentosRealtime from '../hooks/useMovimentosRealtime';
+import useClima from '../hooks/useClima';
 import FogLayer from '../components/FogLayer';
 import { Button } from '../components/ui/button.jsx';
 import './playerview.css';
@@ -19,6 +27,12 @@ const ESCALA_MINIMA = 0.2;
 const ESCALA_MAXIMA = 4;
 
 export default function PlayerView() {
+  const { sessaoId } = useParams();
+  const { user } = useAuth();
+  return <PlayerMesa key={`${sessaoId}_${user?.uid}`} />;
+}
+
+function PlayerMesa() {
   const { sessaoId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -33,7 +47,16 @@ export default function PlayerView() {
   const [erroMapaImagem, setErroMapaImagem] = useState(false);
   const [mapaImagemCarregado, setMapaImagemCarregado] = useState(false);
   const [nevoa, setNevoa] = useState({ ativo: false, celulas: {} });
-  const [permissoes, setPermissoes] = useState({ podeMover: false, podeAdicionar: false });
+  const [permissoes, setPermissoes] = useState(() => obterPermissoes(null));
+  const { transmitir: transmitirMovimento, concluir: concluirMovimento, receber: receberMovimento, cancelar: cancelarMovimento, erro: erroMovimento } = useMovimentosRealtime(sessaoId);
+  const { areas: areasClima } = useClima(sessaoId, permissoes.podeVerMapa);
+  const [ferramenta, setFerramenta] = useState('selecionar');
+  const [cor, setCor] = useState('#ffcc00');
+  const [espessura, setEspessura] = useState(5);
+  const [editorTexto, setEditorTexto] = useState(null);
+  const [erroAnotacao, setErroAnotacao] = useState('');
+  const tracoRef = useRef(null);
+  const previewRef = useRef(null);
   const [modoColocarToken, setModoColocarToken] = useState(false);
   const [tamanhoPalco, setTamanhoPalco] = useState({ largura: window.innerWidth, altura: window.innerHeight });
   const [tamanhoTela, setTamanhoTela] = useState({ largura: window.innerWidth, altura: window.innerHeight });
@@ -41,6 +64,24 @@ export default function PlayerView() {
   const anotacaoRefs = useRef(new Map());
   const panRef = useRef(null);
   const panMoveuRef = useRef(false);
+  const mapaAjustadoRef = useRef(null);
+
+  const colando = useColarNoMapa({
+    stageRef, tamanhoPalco, sessaoId, usuarioId: user?.uid,
+    habilitado: permissoes.podeAnotar, bloqueado: Boolean(editorTexto || carregando),
+    cor, onErro: setErroAnotacao,
+    validarPosicao: (pos) => {
+      if (!nevoa.ativo) return true;
+      return nevoa.celulas?.[`${Math.floor(pos.x / TAMANHO_GRID)},${Math.floor(pos.y / TAMANHO_GRID)}`] === 0;
+    },
+    onColar: async (item, aindaPermitido) => {
+      if (!await salvarAnotacao(sessaoId, item)) throw new Error('Não foi possível salvar o item colado. Tente novamente.');
+      if (!aindaPermitido()) return;
+      setAnotacoes((atuais) => [...atuais.filter((atual) => atual.id !== item.id), item]);
+      setFerramenta('selecionar');
+      setModoColocarToken(false);
+    },
+  });
 
   useEffect(() => {
     const carregarSessao = async () => {
@@ -68,10 +109,10 @@ export default function PlayerView() {
   }, [sessaoId]);
 
   useEffect(() => {
-    if (!db || !sessaoId) return;
+    if (!db || !sessaoId || !permissoes.podeVerMapa) return;
     const unsubTokens = onSnapshot(collection(db, 'sessoes', sessaoId, 'tokens'), (snap) => {
       const lista = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setTokens(lista);
+      setTokens(receberMovimento('tokens', lista));
     }, (err) => {
       console.error('Erro ao ouvir tokens:', err);
     });
@@ -94,7 +135,7 @@ export default function PlayerView() {
     });
     const unsubAnotacoes = onSnapshot(collection(db, 'sessoes', sessaoId, 'anotacoes'), (snap) => {
       const lista = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setAnotacoes(lista);
+      setAnotacoes(receberMovimento('anotacoes', lista));
     }, (err) => {
       console.error('Erro ao ouvir anotações:', err);
     });
@@ -114,25 +155,75 @@ export default function PlayerView() {
       unsubAnotacoes();
       unsubNevoa();
     };
-  }, [sessaoId]);
+  }, [sessaoId, permissoes.podeVerMapa, receberMovimento]);
 
   useEffect(() => {
     if (!db || !sessaoId || !user?.uid) {
-      setPermissoes({ podeMover: false, podeAdicionar: false });
+      setPermissoes(obterPermissoes(null));
       return undefined;
     }
     return onSnapshot(doc(db, 'sessoesMembros', `${sessaoId}_${user.uid}`), (snap) => {
-      const membro = snap.exists() ? snap.data() : {};
-      setPermissoes({ podeMover: Boolean(membro.podeMover), podeAdicionar: Boolean(membro.podeAdicionar) });
+      setPermissoes(obterPermissoes(snap.exists() ? snap.data() : null));
     }, (err) => {
       console.error('Erro ao carregar permissões:', err);
-      setPermissoes({ podeMover: false, podeAdicionar: false });
+      setPermissoes(obterPermissoes(null));
     });
   }, [sessaoId, user?.uid]);
 
   useEffect(() => {
     if (!permissoes.podeAdicionar) setModoColocarToken(false);
   }, [permissoes.podeAdicionar]);
+
+  useEffect(() => {
+    if (!permissoes.podeAnotar) {
+      setFerramenta('selecionar');
+      setEditorTexto(null);
+      setMenuNota(null);
+      tracoRef.current = null;
+      previewRef.current?.clear();
+    }
+    if (!permissoes.podeVerMapa) {
+      setTokens([]);
+      setAnotacoes([]);
+      setUrlMapa(null);
+      setMapaImagemCarregado(false);
+      mapaAjustadoRef.current = null;
+      panRef.current = null;
+    }
+  }, [permissoes.podeAnotar, permissoes.podeVerMapa]);
+
+  useEffect(() => {
+    const finalizar = async (e) => {
+      if (e.button !== 0 || !tracoRef.current) return;
+      const traco = tracoRef.current;
+      tracoRef.current = null;
+      previewRef.current?.clear();
+      if (!permissoes.podeAnotar || traco.pontos.length < 4) return;
+      setErroAnotacao('');
+      if (await salvarAnotacao(sessaoId, traco)) {
+        setAnotacoes((atuais) => [...atuais.filter((item) => item.id !== traco.id), traco]);
+      } else setErroAnotacao('Não foi possível salvar o desenho. Tente novamente.');
+    };
+    const cancelar = (e) => {
+      if (e.type === 'blur' || e.key === 'Escape') {
+        tracoRef.current = null;
+        previewRef.current?.clear();
+        setModoColocarToken(false);
+      }
+    };
+    window.addEventListener('mouseup', finalizar);
+    window.addEventListener('keydown', cancelar);
+    window.addEventListener('blur', cancelar);
+    return () => {
+      window.removeEventListener('mouseup', finalizar);
+      window.removeEventListener('keydown', cancelar);
+      window.removeEventListener('blur', cancelar);
+    };
+  }, [permissoes.podeAnotar, sessaoId]);
+
+  useEffect(() => {
+    cancelarMovimento();
+  }, [permissoes.podeMover, permissoes.podeAnotar, permissoes.podeVerMapa, cancelarMovimento]);
 
   const handleWheel = (e) => {
     e.evt.preventDefault();
@@ -162,7 +253,6 @@ export default function PlayerView() {
   }, []);
 
   // Enquadra o mapa inteiro abaixo do cabeçalho na primeira carga (e se o mapa mudar).
-  const mapaAjustadoRef = useRef(null);
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage || !urlMapa || !mapaImagemCarregado || !tamanhoPalco.largura || !tamanhoPalco.altura) return;
@@ -259,17 +349,25 @@ export default function PlayerView() {
         </div>
         <div className="playerview-meta">
           <Users size={16} />
-          <span>{tokens.length} token{tokens.length === 1 ? '' : 's'}</span>
+          {permissoes.podeVerMapa && <span>{tokens.length} token{tokens.length === 1 ? '' : 's'}</span>}
           {permissoes.podeAdicionar && (
-            <Button size="sm" variant={modoColocarToken ? 'secondary' : 'outline'} onClick={() => setModoColocarToken((ativo) => !ativo)}>
+            <Button size="sm" variant={modoColocarToken ? 'secondary' : 'outline'} onClick={() => { setFerramenta('selecionar'); setEditorTexto(null); setModoColocarToken((ativo) => !ativo); }}>
               {modoColocarToken ? <X size={15} /> : <Plus size={15} />}
               {modoColocarToken ? 'Cancelar' : 'Colocar personagem'}
             </Button>
           )}
         </div>
       </header>
+      {permissoes.podeAnotar && <div className="playerview-anotacoes" role="toolbar" aria-label="Escrever e desenhar no mapa">
+        {[['selecionar', 'Selecionar', MousePointer2], ['desenhar', 'Desenhar', Pencil], ['texto', 'Escrever', Type]].map(([id, nome, Icone]) =>
+          <button key={id} type="button" aria-label={nome} title={nome} aria-pressed={ferramenta === id}
+            onClick={() => { setFerramenta(id); setModoColocarToken(false); setEditorTexto(null); tracoRef.current = null; previewRef.current?.clear(); }}><Icone size={18} /><span>{nome}</span></button>)}
+        <label>Cor<input type="color" value={cor} onChange={(e) => setCor(e.target.value)} /></label>
+        {ferramenta === 'desenhar' && <label>Traço<select value={espessura} onChange={(e) => setEspessura(Number(e.target.value))}><option value={2}>Fino</option><option value={5}>Médio</option><option value={10}>Grosso</option></select></label>}
+      </div>}
       {modoColocarToken && <p className="playerview-placement-hint" role="status">Clique em uma célula vazia para colocar seu personagem.</p>}
-      <Stage
+      {!permissoes.podeVerMapa && <div className="playerview-bloqueado" role="status"><EyeOff size={30} /><h2>Mapa indisponível</h2><p>O mestre pode liberar seu acesso pelo painel de jogadores.</p></div>}
+      {permissoes.podeVerMapa && <Stage
         ref={stageRef}
         width={tamanhoTela.largura}
         height={tamanhoTela.altura}
@@ -290,9 +388,32 @@ export default function PlayerView() {
               };
               stage.container().style.cursor = 'grabbing';
             }
+            return;
+          }
+          if (e.evt.button !== 0 || !permissoes.podeAnotar || ferramenta === 'selecionar' || editorTexto) return;
+          const pos = stageRef.current.getRelativePointerPosition();
+          if (!pos || tokenSobNevoa(pos)) return;
+          setErroAnotacao('');
+          if (ferramenta === 'desenhar') {
+            tracoRef.current = { id: novoId(), tipo: 'traco', pontos: [pos.x, pos.y], cor, espessura, autorId: user.uid };
+            previewRef.current?.update(tracoRef.current);
+          } else if (ferramenta === 'texto') {
+            e.evt.preventDefault();
+            setEditorTexto({ id: novoId(), tipo: 'texto', x: pos.x, y: pos.y, texto: '', cor, fontSize: 20, fontFamily: 'Arial, sans-serif', boxWidth: 220, boxHeight: 72, autorId: user.uid });
           }
         }}
         onMouseMove={(e) => {
+          if (tracoRef.current && permissoes.podeAnotar) {
+            const pos = stageRef.current.getRelativePointerPosition();
+            if (pos && !tokenSobNevoa(pos)) {
+              const traco = tracoRef.current;
+              const pontos = traco.pontos;
+              if (Math.hypot(pos.x - pontos[pontos.length - 2], pos.y - pontos[pontos.length - 1]) >= 1.5) {
+                traco.pontos = [...pontos, pos.x, pos.y];
+                previewRef.current?.update(traco);
+              }
+            }
+          }
           if (!panRef.current) return;
           const stage = stageRef.current;
           if (!stage) return;
@@ -323,7 +444,7 @@ export default function PlayerView() {
             setMapaImagemCarregado(true);
           }} /> : null}
         </Layer>
-        <Layer>
+        <Layer listening={ferramenta === 'selecionar'}>
           {anotacoes.map((item) => item.tipo === 'traco' ? (
             <Line
               key={item.id}
@@ -333,28 +454,58 @@ export default function PlayerView() {
               strokeWidth={item.espessura}
               x={item.offsetX || 0}
               y={item.offsetY || 0}
-              draggable={permissoes.podeMover}
+              draggable={podeEditarAnotacao(permissoes, item, user?.uid)}
               lineCap="round"
               lineJoin="round"
+              onDragMove={(e) => {
+                if (!podeEditarAnotacao(permissoes, item, user?.uid)) return;
+                transmitirMovimento([], [item.tipo === 'traco'
+                  ? { id: item.id, tipo: item.tipo, offsetX: e.target.x(), offsetY: e.target.y() }
+                  : { id: item.id, x: e.target.x(), y: e.target.y() }]);
+              }}
               onDragEnd={(e) => {
-                if (!permissoes.podeMover) return;
+                if (!podeEditarAnotacao(permissoes, item, user?.uid)) return;
                 const nova = { ...item, offsetX: e.target.x(), offsetY: e.target.y() };
                 setAnotacoes((atuais) => atuais.map((a) => (a.id === item.id ? nova : a)));
-                salvarAnotacao(sessaoId, nova);
+                concluirMovimento([], [nova]);
               }}
             />
+          ) : item.tipo === 'imagem' ? (
+            <ImageAnnotation key={item.id} item={item}
+              ref={(node) => { if (node) anotacaoRefs.current.set(item.id, node); else anotacaoRefs.current.delete(item.id); }}
+              draggable={podeEditarAnotacao(permissoes, item, user?.uid)}
+              onDragMove={(e) => {
+                if (podeEditarAnotacao(permissoes, item, user?.uid)) transmitirMovimento([], [{ id: item.id, x: e.target.x(), y: e.target.y() }]);
+              }}
+              onDragEnd={(e) => {
+                if (!podeEditarAnotacao(permissoes, item, user?.uid)) return;
+                const nova = { ...item, x: e.target.x(), y: e.target.y() };
+                setAnotacoes((atuais) => atuais.map((atual) => atual.id === item.id ? nova : atual));
+                concluirMovimento([], [nova]);
+              }}
+              onContextMenu={(e) => {
+                e.evt.preventDefault();
+                if (!podeEditarAnotacao(permissoes, item, user?.uid) || panMoveuRef.current) return;
+                setMenuNota({ id: item.id, x: Math.min(e.evt.clientX + 10, window.innerWidth - 200), y: Math.min(e.evt.clientY + 10, window.innerHeight - 180) });
+              }} />
           ) : item.tipo === 'forma' ? (
             <Group
               key={item.id}
               ref={(node) => { if (node) anotacaoRefs.current.set(item.id, node); else anotacaoRefs.current.delete(item.id); }}
               x={item.x}
               y={item.y}
-              draggable={permissoes.podeMover}
+              draggable={podeEditarAnotacao(permissoes, item, user?.uid)}
+              onDragMove={(e) => {
+                if (!podeEditarAnotacao(permissoes, item, user?.uid)) return;
+                transmitirMovimento([], [item.tipo === 'traco'
+                  ? { id: item.id, tipo: item.tipo, offsetX: e.target.x(), offsetY: e.target.y() }
+                  : { id: item.id, x: e.target.x(), y: e.target.y() }]);
+              }}
               onDragEnd={(e) => {
-                if (!permissoes.podeMover) return;
+                if (!podeEditarAnotacao(permissoes, item, user?.uid)) return;
                 const nova = { ...item, x: e.target.x(), y: e.target.y() };
                 setAnotacoes((atuais) => atuais.map((a) => (a.id === item.id ? nova : a)));
-                salvarAnotacao(sessaoId, nova);
+                concluirMovimento([], [nova]);
               }}
             >
               {item.forma === 'circulo' ? (
@@ -365,22 +516,33 @@ export default function PlayerView() {
                 <Line points={item.pontos} closed={item.forma === 'triangulo' || item.forma === 'estrela'} fill="rgba(0,0,0,0)" stroke={item.cor} strokeWidth={item.espessura} lineCap="round" lineJoin="round" />
               )}
             </Group>
-          ) : item.tipo === 'texto' ? (
+          ) : item.tipo === 'texto' && item.id !== editorTexto?.id ? (
             <Group
               key={item.id}
               ref={(node) => { if (node) anotacaoRefs.current.set(item.id, node); else anotacaoRefs.current.delete(item.id); }}
               x={item.x}
               y={item.y}
-              draggable={permissoes.podeMover}
+              draggable={podeEditarAnotacao(permissoes, item, user?.uid)}
+              onDragMove={(e) => {
+                if (!podeEditarAnotacao(permissoes, item, user?.uid)) return;
+                transmitirMovimento([], [item.tipo === 'traco'
+                  ? { id: item.id, tipo: item.tipo, offsetX: e.target.x(), offsetY: e.target.y() }
+                  : { id: item.id, x: e.target.x(), y: e.target.y() }]);
+              }}
               onDragEnd={(e) => {
-                if (!permissoes.podeMover) return;
+                if (!podeEditarAnotacao(permissoes, item, user?.uid)) return;
                 const nova = { ...item, x: e.target.x(), y: e.target.y() };
                 setAnotacoes((atuais) => atuais.map((a) => (a.id === item.id ? nova : a)));
-                salvarAnotacao(sessaoId, nova);
+                concluirMovimento([], [nova]);
+              }}
+              onDblClick={(e) => {
+                if (!podeEditarAnotacao(permissoes, item, user?.uid)) return;
+                e.cancelBubble = true;
+                setEditorTexto({ ...item });
               }}
               onContextMenu={(e) => {
                 e.evt.preventDefault();
-                if (!permissoes.podeMover) return;
+                if (!podeEditarAnotacao(permissoes, item, user?.uid)) return;
                 if (panMoveuRef.current) {
                   panMoveuRef.current = false;
                   return;
@@ -397,6 +559,8 @@ export default function PlayerView() {
             </Group>
           ) : null)}
         </Layer>
+        <Layer listening={false}><DrawingPreview ref={previewRef} /></Layer>
+        <WeatherLayer areas={areasClima} />
         {/* Mantém a grade visível sobre a névoa, sem revelar mapa ou anotações. */}
         <FogLayer
           largura={tamanhoPalco.largura}
@@ -418,14 +582,16 @@ export default function PlayerView() {
               raio={TAMANHO_GRID / 2 - 2}
               selecionado={false}
               medindo={false}
-              interativo={permissoes.podeMover && !tokenSobNevoa(tk)}
+              interativo={permissoes.podeMover && ferramenta === 'selecionar' && !editorTexto && !tokenSobNevoa(tk)}
               ferramenta="selecionar"
               onSelecionar={() => {}}
               onDuploClique={() => {}}
               onArrasteInicio={() => {}}
-              onArraste={() => {}}
+              onArraste={(e) => {
+                if (permissoes.podeMover) transmitirMovimento([{ id: tk.id, x: e.target.x(), y: e.target.y() }]);
+              }}
               onArrasteFim={(e) => {
-                if (!permissoes.podeMover) return;
+                if (!permissoes.podeMover || !permissoes.podeVerMapa) return;
                 const circulo = e.target;
                 const raio = TAMANHO_GRID / 2;
                 const coluna = Math.floor(circulo.x() / TAMANHO_GRID);
@@ -440,17 +606,30 @@ export default function PlayerView() {
                 tokenNodeRefs.current.get(tk.id)?.moverPara(xNovo, yNovo);
                 const novoToken = { ...tk, x: xNovo, y: yNovo };
                 setTokens((atuais) => atuais.map((item) => (item.id === tk.id ? novoToken : item)));
-                salvarToken(sessaoId, novoToken);
+                concluirMovimento([novoToken]);
               }}
               onMenuContexto={() => {}}
             />
           ))}
         </Layer>
-      </Stage>
+      </Stage>}
+      {colando && <p className="clipboard-status" role="status">Colando no mapa…</p>}
+      {editorTexto && permissoes.podeAnotar && <CanvasTextEditor key={editorTexto.id} stageRef={stageRef} editor={editorTexto}
+        onChange={(texto) => setEditorTexto((atual) => atual && ({ ...atual, texto }))}
+        onCancel={() => setEditorTexto(null)}
+        onCommit={async () => {
+          const item = editorTexto;
+          setEditorTexto(null);
+          if (!podeEditarAnotacao(permissoes, item, user?.uid) || !item.texto.trim()) return;
+          setErroAnotacao('');
+          if (await salvarAnotacao(sessaoId, item)) setAnotacoes((atuais) => [...atuais.filter((a) => a.id !== item.id), item]);
+          else setErroAnotacao('Não foi possível salvar o texto. Tente novamente.');
+        }} />}
+      {(erroAnotacao || erroMovimento) && permissoes.podeVerMapa && <p className="playerview-map-error" role="alert">{erroAnotacao || erroMovimento}</p>}
       {erroMapaImagem && <p className="playerview-map-error" role="alert">O mapa da campanha não carregou. Peça ao mestre para enviar a imagem novamente.</p>}
-      {menuNota && (() => {
-        const nota = anotacoes.find((a) => a.id === menuNota.id && a.tipo === 'texto');
-        if (!nota) return null;
+      {menuNota && permissoes.podeAnotar && (() => {
+        const nota = anotacoes.find((a) => a.id === menuNota.id && ['texto', 'imagem'].includes(a.tipo));
+        if (!podeEditarAnotacao(permissoes, nota, user?.uid)) return null;
         const atualizarNota = (alteracoes) => {
           const nova = { ...nota, ...alteracoes };
           setAnotacoes((atuais) => atuais.map((a) => (a.id === nota.id ? nova : a)));
@@ -459,15 +638,17 @@ export default function PlayerView() {
         const fechar = () => setMenuNota(null);
         return (
           <div className="token-contextual" style={{ left: menuNota.x, top: menuNota.y }} onMouseDown={(e) => e.stopPropagation()}>
-            <strong>Nota</strong>
-            <label className="token-contextual__cor">Cor <input type="color" value={nota.cor || '#ffffff'} onChange={(e) => atualizarNota({ cor: e.target.value })} /></label>
-            <button onClick={() => { atualizarNota({ fontSize: Math.min(60, (nota.fontSize || 20) + 2) }); fechar(); }}>Aumentar fonte</button>
-            <button onClick={() => { atualizarNota({ fontSize: Math.max(10, (nota.fontSize || 20) - 2) }); fechar(); }}>Diminuir fonte</button>
+            <strong>{nota.tipo === 'imagem' ? 'Imagem' : 'Nota'}</strong>
+            {nota.tipo === 'texto' && <>
+              <label className="token-contextual__cor">Cor <input type="color" value={nota.cor || '#ffffff'} onChange={(e) => atualizarNota({ cor: e.target.value })} /></label>
+              <button onClick={() => { atualizarNota({ fontSize: Math.min(60, (nota.fontSize || 20) + 2) }); fechar(); }}>Aumentar fonte</button>
+              <button onClick={() => { atualizarNota({ fontSize: Math.max(10, (nota.fontSize || 20) - 2) }); fechar(); }}>Diminuir fonte</button>
+            </>}
             <button className="token-contextual__excluir" onClick={() => {
               setAnotacoes((atuais) => atuais.filter((a) => a.id !== nota.id));
               excluirAnotacao(sessaoId, nota.id);
               fechar();
-            }}>Apagar nota</button>
+            }}>{nota.tipo === 'imagem' ? 'Apagar imagem' : 'Apagar nota'}</button>
           </div>
         );
       })()}

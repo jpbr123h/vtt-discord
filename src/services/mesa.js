@@ -210,3 +210,32 @@ export function agendarSalvarAnotacao(sessaoId, anotacao, atraso = 250) {
 export function finalizarSalvarAnotacao(anotacaoId) {
   finalizar(`anotacao:${anotacaoId}`);
 }
+
+export async function salvarClima(sessaoId, areas) {
+  if (!db || !sessaoId) return false;
+  try {
+    await setDoc(doc(db, 'sessoes', sessaoId, 'estado', 'clima'), { areas, atualizadoEm: serverTimestamp() });
+    return true;
+  } catch (erro) {
+    registrarErro('salvar clima', erro);
+    return false;
+  }
+}
+
+// Atualiza somente coordenadas: um arraste não sobrescreve nome, vida ou estilo.
+export async function salvarMovimentos(sessaoId, movimentos = []) {
+  if (!db || !sessaoId || movimentos.length === 0) return false;
+  try {
+    for (let inicio = 0; inicio < movimentos.length; inicio += LIMITE_LOTE) {
+      const lote = writeBatch(db);
+      movimentos.slice(inicio, inicio + LIMITE_LOTE).forEach(({ colecao, id, dados }) => {
+        if (colecao === 'tokens' || colecao === 'anotacoes') lote.update(referencia(colecao, sessaoId, id), dados);
+      });
+      await lote.commit();
+    }
+    return true;
+  } catch (erro) {
+    registrarErro('transmitir movimento', erro);
+    return false;
+  }
+}
